@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Personal Development Docs
+ARCHITECTURE.md
+LEARNING_PATH.md

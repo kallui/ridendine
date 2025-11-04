@@ -9,16 +9,20 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@googlemaps/js-api-loader": "^2.0.2",
     "@turf/turf": "^7.2.0",
     "@types/next-pwa": "^5.6.9",
+    "maplibre-gl": "^5.10.0",
     "next": "16.0.1",
     "next-pwa": "^5.6.0",
     "pg": "^8.16.3",
+    "rbush": "^4.0.1",
     "react": "19.2.0",
     "react-dom": "19.2.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/google.maps": "^3.58.1",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
