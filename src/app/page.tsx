@@ -1,4 +1,6 @@
 import Map from "@/components/Map";
+import Navbar from "@/components/Navbar";
+import RouteSearch from "@/components/RouteSearch";
 
 export default function Home() {
   console.log(
@@ -7,8 +9,17 @@ export default function Home() {
   );
 
   return (
-    <div className="h-screen w-screen">
-      <Map centerCoordinate={{ lat: 37.7749, lng: -122.4194 }} zoomLevel={12} />
+    <div className="h-screen w-screen flex flex-col">
+      <Navbar />
+      <div className="flex-1 relative">
+        <Map
+          centerCoordinate={{ lat: 37.7749, lng: -122.4194 }}
+          zoomLevel={12}
+        />
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 w-[calc(100%-2rem)] max-w-sm sm:left-4 sm:translate-x-0 sm:w-96">
+          <RouteSearch />
+        </div>
+      </div>
     </div>
   );
 }

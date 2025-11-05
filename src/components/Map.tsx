@@ -25,6 +25,7 @@ export default function Map({ centerCoordinate, zoomLevel }: MapProps) {
     mapInstanceRef.current = new google.maps.Map(mapRef.current, {
       center: centerCoordinate,
       zoom: zoomLevel,
+      mapTypeControl: false,
     });
 
     console.log("Map created!", mapInstanceRef.current);
