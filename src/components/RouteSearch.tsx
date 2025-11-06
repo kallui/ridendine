@@ -1,10 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { usePlacesAutocomplete } from "@/hooks/usePlacesAutocomplete";
 
 export default function RouteSearch() {
   const [origin, setOrigin] = useState("");
   const [destination, setDestination] = useState("");
+
+  const originAutoComplete = usePlacesAutocomplete();
+  const destinationAutoComplete = usePlacesAutocomplete();
+
+  useEffect(() => {
+    if (originAutoComplete.selectedPlace?.formatted_address) {
+      setOrigin(originAutoComplete.selectedPlace.formatted_address);
+    }
+  }, [originAutoComplete.selectedPlace]);
+
+  useEffect(() => {
+    if (destinationAutoComplete.selectedPlace?.formatted_address) {
+      setDestination(destinationAutoComplete.selectedPlace.formatted_address);
+    }
+  }, [destinationAutoComplete.selectedPlace]);
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -18,6 +34,7 @@ export default function RouteSearch() {
     >
       {/* <label htmlFor="origin">Starting Point:</label> */}
       <input
+        ref={originAutoComplete.inputRef}
         type="text"
         id="origin"
         className="w-full px-4 py-2 border border-gray-300 rounded-md 
@@ -30,6 +47,7 @@ export default function RouteSearch() {
 
       {/* <label htmlFor="destination">Destination:</label> */}
       <input
+        ref={destinationAutoComplete.inputRef}
         type="text"
         id="destination"
         className="w-full px-4 py-2 border border-gray-300 rounded-md 

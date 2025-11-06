@@ -13,6 +13,12 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
   ]),
+  // Custom rule overrides
+  {
+    rules: {
+      "react-compiler/react-compiler": "off", // Disable ref access warning
+    },
+  },
 ]);
 
 export default eslintConfig;

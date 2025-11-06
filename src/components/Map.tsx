@@ -8,7 +8,9 @@ interface MapProps {
 }
 
 export default function Map({ centerCoordinate, zoomLevel }: MapProps) {
+  // Ref for the map container
   const mapRef = useRef<HTMLDivElement>(null);
+  // Ref for the map instance
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
 
   useEffect(() => {
