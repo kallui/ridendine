@@ -1,21 +1,18 @@
 import { useEffect, useRef, useState } from "react";
+import { useMapsLibrary } from "@vis.gl/react-google-maps";
 
 export function usePlacesAutocomplete() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [selectedPlace, setSelectedPlace] =
     useState<google.maps.places.PlaceResult | null>(null);
+  const placesLib = useMapsLibrary("places");
 
   useEffect(() => {
     // Check if input exists
-    if (!inputRef.current) return;
+    if (!inputRef.current || !placesLib) return;
 
-    if (typeof google === "undefined") {
-      console.log("Google Maps not loaded yet");
-      return;
-    }
-
-    const autocomplete = new google.maps.places.Autocomplete(inputRef.current, {
-      fields: ["formatted_address", "geometry", "name", "place_id"], // Only get needed fields (saves $)
+    const autocomplete = new placesLib.Autocomplete(inputRef.current, {
+      fields: ["formatted_address", "geometry", "name", "place_id"],
     });
 
     autocomplete.addListener("place_changed", () => {
@@ -26,7 +23,7 @@ export function usePlacesAutocomplete() {
     return () => {
       google.maps.event.clearInstanceListeners(autocomplete);
     };
-  }, []);
+  }, [placesLib]);
 
   return { inputRef, selectedPlace };
 }
