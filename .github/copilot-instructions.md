@@ -11,7 +11,11 @@
 ## Project Context
 
 - **Goal**: PWA to find restaurants along transit routes
-- **Stack**: Next.js 15, TypeScript, Tailwind CSS, Google Maps API
+- **Stack**: Next.js 15, TypeScript, Tailwind CSS, **@vis.gl/react-google-maps** library
+- **Maps Library**: Using **@vis.gl/react-google-maps v1.7.1** (modern React wrapper for Google Maps API)
+  - Provides declarative components (APIProvider, GoogleMap, etc.)
+  - Better React integration with hooks (useMapsLibrary, useMap, etc.)
+  - Saves ~40-50% development time vs vanilla Google Maps API
 - **Architecture**: Option A (3-4 search circles along route) with R-tree filtering
 - **Cost-conscious**: Using free tier (10K requests/month per API)
 
@@ -22,12 +26,13 @@
 - Keep components in `src/components/`
 - Use semantic HTML (`<nav>`, `<main>`, etc.)
 - Tailwind CSS for styling
+- **Use @vis.gl/react-google-maps hooks** instead of vanilla Google Maps API where possible
 
 ## Reference Documents
 
 - `ARCHITECTURE.md` - Technical architecture and API strategy
 - `LEARNING_PATH.md` - 15-step learning guide with phases
-- Progress: Currently on Step 5 (Search Input Component)
+- Progress: Currently on Step 7 (Directions API Implementation)
 
 ## When User Asks Questions
 

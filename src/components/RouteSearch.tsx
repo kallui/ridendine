@@ -2,9 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { usePlacesAutocomplete } from "@/hooks/usePlacesAutocomplete";
-// const { Route } = await google.maps.importLibrary("routes");
 
-export default function RouteSearch() {
+interface RouteSearchProps {
+  onSearch: (origin: string, destination: string) => void;
+  isLoading?: boolean;
+}
+
+export default function RouteSearch({ onSearch, isLoading }: RouteSearchProps) {
   const [origin, setOrigin] = useState("");
   const [destination, setDestination] = useState("");
 
@@ -25,7 +29,7 @@ export default function RouteSearch() {
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    // Handle form submission logic here
+    onSearch(origin, destination);
   };
 
   return (
@@ -60,10 +64,11 @@ export default function RouteSearch() {
       />
 
       <button
-        className="w-full bg-sky-600 text-white py-3 px-4 rounded-md hover:bg-sky-700 transition-colors font-medium shadow-sm"
+        className="w-full bg-sky-600 text-white py-3 px-4 rounded-md hover:bg-sky-700 transition-colors font-medium shadow-sm disabled:bg-gray-400 disabled:cursor-not-allowed"
         type="submit"
+        disabled={isLoading}
       >
-        Search
+        {isLoading ? "Loading..." : "Search"}
       </button>
     </form>
   );
