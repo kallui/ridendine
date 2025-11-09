@@ -16,8 +16,15 @@
   - Provides declarative components (APIProvider, GoogleMap, etc.)
   - Better React integration with hooks (useMapsLibrary, useMap, etc.)
   - Saves ~40-50% development time vs vanilla Google Maps API
-- **Architecture**: Option A (3-4 search circles along route) with R-tree filtering
+- **Architecture**: Polyline-based filtering approach (decided Step 8)
+  - Extract polyline coordinates from Directions API transit steps
+  - One Places API search within route bounds
+  - Client-side filtering using Turf.js (restaurants within 500m of route)
+  - Display filtered restaurants as markers on map
+- **Geospatial Library**: Turf.js (@turf/turf) for distance calculations
 - **Cost-conscious**: Using free tier (10K requests/month per API)
+  - ~2-3 API calls per route search (1x Directions, 1-2x Places)
+  - Supports ~3,000-5,000 route searches per month
 
 ## Code Style Preferences
 
@@ -32,7 +39,18 @@
 
 - `ARCHITECTURE.md` - Technical architecture and API strategy
 - `LEARNING_PATH.md` - 15-step learning guide with phases
-- Progress: Currently on Step 7 (Directions API Implementation)
+- Progress: Currently on Step 8 (Restaurant Search & Filtering)
+  - ✅ Step 7 completed: Directions API with transit routes displaying
+  - 🔄 Step 8 in progress: Implementing polyline-based restaurant filtering
+
+## Restaurant Filtering Implementation Plan
+
+1. **Install Turf.js**: `npm install @turf/turf`
+2. **Extract Polyline**: Get all coordinates from transit steps in DirectionsResult
+3. **Search Restaurants**: Places API nearbySearch within route bounds
+4. **Filter Client-Side**: Use `turf.pointToLineDistance()` to keep only restaurants within 500m
+5. **Display Markers**: Render restaurant markers on map using `AdvancedMarker` component
+6. **Show Info**: Display restaurant name, distance from route, and Google Maps link
 
 ## When User Asks Questions
 
