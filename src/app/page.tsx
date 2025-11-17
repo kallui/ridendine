@@ -7,7 +7,7 @@ import { APIProvider, useMapsLibrary } from "@vis.gl/react-google-maps";
 import { useState } from "react";
 import * as turf from "@turf/turf";
 
-type Restaurant = {
+export type Restaurant = {
   placeId: string;
   name: string;
   location: { lat: number; lng: number };
@@ -15,13 +15,23 @@ type Restaurant = {
   types: string[];
 };
 
+export type SearchCircle = {
+  center: google.maps.LatLngLiteral;
+  radius: number;
+};
+
 function MapContent() {
+  // === SEARCH CONFIGURATION ===
+  const turfFilterDistance = 750; // Turf.js filter: keep restaurants within this distance from route (meters)
+  const apiSearchRadius = 1300; // API search radius: cast wider net, then filter with Turf.js (meters)
+  const searchInterval = 2.5; // Sample points along route every X km for API searches
+
+  // === STATE ===
   const [route, setRoute] = useState<google.maps.DirectionsResult | null>(null);
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [isSearchingRestaurants, setIsSearchingRestaurants] = useState(false);
-  const [searchBounds, setSearchBounds] =
-    useState<google.maps.LatLngBoundsLiteral | null>(null);
-  const [showBounds, setShowBounds] = useState(false);
+  const [searchCircles, setSearchCircles] = useState<SearchCircle[]>([]);
+  const [showBounds, setShowBounds] = useState(true);
 
   const routeLib = useMapsLibrary("routes");
   const placesLib = useMapsLibrary("places");
@@ -64,15 +74,15 @@ function MapContent() {
         }))
       );
 
-    // Search for restaurants within 500m of route
-    searchRestaurants(polylineCoordinates, 500);
+    // Search for restaurants within 1000m of route
+    searchRestaurants(polylineCoordinates, turfFilterDistance);
 
     return polylineCoordinates;
   };
 
   const searchRestaurants = (
     polylineCoordinates: google.maps.LatLngLiteral[],
-    searchRadiusMeters: number
+    filterDistance: number
   ) => {
     if (!placesLib) {
       console.error("Places library not loaded yet");
@@ -81,118 +91,163 @@ function MapContent() {
 
     setIsSearchingRestaurants(true);
 
-    // Calculate bounding box for route
-    const maxLat = Math.max(...polylineCoordinates.map((coord) => coord.lat));
-    const minLat = Math.min(...polylineCoordinates.map((coord) => coord.lat));
-    const maxLng = Math.max(...polylineCoordinates.map((coord) => coord.lng));
-    const minLng = Math.min(...polylineCoordinates.map((coord) => coord.lng));
+    // Create Turf.js line from route
+    const turfCoords = polylineCoordinates.map((c) => [c.lng, c.lat]);
+    const routeLine = turf.lineString(turfCoords);
+    const routeLength = turf.length(routeLine, { units: "kilometers" });
 
-    // Add buffer around route (convert meters to degrees)
-    const bufferInDegrees = searchRadiusMeters / 111000;
+    // Sample points along route for API searches
+    const numSearches = Math.ceil(routeLength / searchInterval);
+    const searchPoints: google.maps.LatLngLiteral[] = [];
 
-    const bounds = {
-      north: maxLat + bufferInDegrees,
-      south: minLat - bufferInDegrees,
-      east: maxLng + bufferInDegrees,
-      west: minLng - bufferInDegrees,
-    };
+    for (let i = 0; i <= numSearches; i++) {
+      const distance = i * searchInterval;
+      const point = turf.along(routeLine, distance, { units: "kilometers" });
+      const [lng, lat] = point.geometry.coordinates;
+      searchPoints.push({ lat, lng });
+    }
 
-    // Search for restaurants in bounding box
+    // Store search circles for visualization (show API search radius)
+    const circles: SearchCircle[] = searchPoints.map((center) => ({
+      center,
+      radius: apiSearchRadius,
+    }));
+    setSearchCircles(circles);
+
+    console.log(
+      `Route is ${routeLength.toFixed(1)}km, will make ${
+        searchPoints.length
+      } Places API calls`
+    );
+
+    // Perform multiple searches and collect all results
+    const allPlaces: { [key: string]: google.maps.places.PlaceResult } = {};
     const service = new placesLib.PlacesService(document.createElement("div"));
-    service.nearbySearch(
-      { bounds: bounds, type: "restaurant" },
-      (results, status) => {
-        if (status === placesLib.PlacesServiceStatus.OK && results) {
-          // Validate coordinates
-          const validCoordinates = polylineCoordinates.filter(
-            (c) =>
-              typeof c.lat === "number" &&
-              typeof c.lng === "number" &&
-              !isNaN(c.lat) &&
-              !isNaN(c.lng)
-          );
+    let completedSearches = 0;
 
-          if (validCoordinates.length < 2) {
-            console.error("Not enough valid coordinates");
-            setIsSearchingRestaurants(false);
-            return;
-          }
+    searchPoints.forEach((point) => {
+      service.nearbySearch(
+        {
+          location: point,
+          radius: apiSearchRadius, // Use wider API search radius
+          type: "restaurant",
+        },
+        (results, status) => {
+          completedSearches++;
 
-          // Create Turf.js line for distance calculations
-          const turfCoords = validCoordinates.map((c) => [c.lng, c.lat]);
-          let routeLine = turf.lineString(turfCoords);
-
-          // Simplify line to avoid precision issues
-          try {
-            routeLine = turf.simplify(routeLine, {
-              tolerance: 0.0001,
-              highQuality: false,
+          if (status === placesLib.PlacesServiceStatus.OK && results) {
+            // Add results to object (deduplicates by place_id)
+            results.forEach((place) => {
+              if (place.place_id) {
+                allPlaces[place.place_id] = place;
+              }
             });
-          } catch (e) {
-            console.warn("Could not simplify line:", e);
           }
 
-          // Filter and transform restaurants
-          const restaurants = results
-            .map((place): Restaurant | null => {
-              if (!place.geometry || !place.geometry.location) {
-                return null;
-              }
-
-              const lat = place.geometry.location.lat();
-              const lng = place.geometry.location.lng();
-
-              if (
-                typeof lat !== "number" ||
-                typeof lng !== "number" ||
-                isNaN(lat) ||
-                isNaN(lng)
-              ) {
-                return null;
-              }
-
-              try {
-                // Calculate distance from route
-                const restaurantPoint = turf.point([lng, lat]);
-                const distance = turf.pointToLineDistance(
-                  restaurantPoint,
-                  routeLine,
-                  { units: "meters" }
-                );
-
-                // Filter: Keep only within search radius
-                if (distance > searchRadiusMeters) {
-                  return null;
-                }
-
-                // Transform to Restaurant type
-                return {
-                  placeId: place.place_id || "",
-                  name: place.name || "Unknown Restaurant",
-                  location: { lat, lng },
-                  distanceFromRoute: Math.round(distance),
-                  types: place.types || [],
-                };
-              } catch {
-                // Silently skip restaurants that cause errors
-                return null;
-              }
-            })
-            .filter(
-              (restaurant): restaurant is Restaurant => restaurant !== null
+          // Wait for all searches to complete
+          if (completedSearches === searchPoints.length) {
+            processAllResults(
+              Object.values(allPlaces),
+              polylineCoordinates,
+              filterDistance
             );
+          }
+        }
+      );
+    });
+  };
 
-          console.log(
-            `Found ${restaurants.length} restaurants within ${searchRadiusMeters}m`
-          );
-          setRestaurants(restaurants);
-        } else {
-          console.error("Places search failed:", status);
+  const processAllResults = (
+    results: google.maps.places.PlaceResult[],
+    polylineCoordinates: google.maps.LatLngLiteral[],
+    filterDistance: number
+  ) => {
+    console.log(
+      `Collected ${results.length} unique restaurants from all searches`
+    );
+
+    // Validate coordinates
+    const validCoordinates = polylineCoordinates.filter(
+      (c) =>
+        typeof c.lat === "number" &&
+        typeof c.lng === "number" &&
+        !isNaN(c.lat) &&
+        !isNaN(c.lng)
+    );
+
+    if (validCoordinates.length < 2) {
+      console.error("Not enough valid coordinates");
+      setIsSearchingRestaurants(false);
+      return;
+    }
+
+    // Create Turf.js line for distance calculations
+    const turfCoords = validCoordinates.map((c) => [c.lng, c.lat]);
+    let routeLine = turf.lineString(turfCoords);
+
+    // Simplify line to avoid precision issues
+    try {
+      routeLine = turf.simplify(routeLine, {
+        tolerance: 0.0001,
+        highQuality: false,
+      });
+    } catch (e) {
+      console.warn("Could not simplify line:", e);
+    }
+
+    // Filter and transform restaurants
+    const restaurants = results
+      .map((place): Restaurant | null => {
+        if (!place.geometry || !place.geometry.location) {
+          return null;
         }
 
-        setIsSearchingRestaurants(false);
-      }
+        const lat = place.geometry.location.lat();
+        const lng = place.geometry.location.lng();
+
+        if (
+          typeof lat !== "number" ||
+          typeof lng !== "number" ||
+          isNaN(lat) ||
+          isNaN(lng)
+        ) {
+          return null;
+        }
+
+        try {
+          // Calculate distance from route
+          const restaurantPoint = turf.point([lng, lat]);
+          const distance = turf.pointToLineDistance(
+            restaurantPoint,
+            routeLine,
+            { units: "meters" }
+          );
+
+          // Filter: Keep only within filter distance
+          if (distance > filterDistance) {
+            return null;
+          }
+
+          // Transform to Restaurant type
+          return {
+            placeId: place.place_id || "",
+            name: place.name || "Unknown Restaurant",
+            location: { lat, lng },
+            distanceFromRoute: Math.round(distance),
+            types: place.types || [],
+          };
+        } catch {
+          // Silently skip restaurants that cause errors
+          return null;
+        }
+      })
+      .filter((restaurant): restaurant is Restaurant => restaurant !== null);
+
+    console.log(
+      `Searched ${apiSearchRadius}m radius, filtered to ${restaurants.length} restaurants within ${filterDistance}m of route`
     );
+    setRestaurants(restaurants);
+    setIsSearchingRestaurants(false);
   };
 
   return (
@@ -203,6 +258,9 @@ function MapContent() {
           centerCoordinate={{ lat: 37.7749, lng: -122.4194 }}
           zoomLevel={12}
           route={route}
+          restaurants={restaurants}
+          searchCircles={searchCircles}
+          showBounds={showBounds}
         />
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 w-[calc(100%-2rem)] max-w-sm sm:left-4 sm:translate-x-0 sm:w-96">
           <RouteSearch onSearch={handleGetDirection} isLoading={!routeLib} />
