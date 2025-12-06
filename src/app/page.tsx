@@ -84,6 +84,7 @@ function MapContent() {
     polylineCoordinates: google.maps.LatLngLiteral[],
     filterDistance: number
   ) => {
+    console.log("Hello winnie");
     if (!placesLib) {
       console.error("Places library not loaded yet");
       return;
