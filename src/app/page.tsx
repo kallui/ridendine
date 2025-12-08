@@ -2,6 +2,7 @@
 
 import Map from "@/components/Map";
 import Navbar from "@/components/Navbar";
+import RestaurantList from "@/components/RestaurantList";
 import RouteSearch from "@/components/RouteSearch";
 import { APIProvider, useMapsLibrary } from "@vis.gl/react-google-maps";
 import { useState } from "react";
@@ -32,7 +33,9 @@ function MapContent() {
   const [isSearchingRestaurants, setIsSearchingRestaurants] = useState(false);
   const [searchCircles, setSearchCircles] = useState<SearchCircle[]>([]);
   const [showBounds, setShowBounds] = useState(true);
+  const [isRestaurantListOpen, setIsRestaurantListOpen] = useState(false);
 
+  // === MAP LIBRARIES ===
   const routeLib = useMapsLibrary("routes");
   const placesLib = useMapsLibrary("places");
 
@@ -199,6 +202,15 @@ function MapContent() {
     // Filter and transform restaurants
     const restaurants = results
       .map((place): Restaurant | null => {
+        // Filter out hotels and lodging
+        if (place.types?.some(type => 
+          type === "lodging" || 
+          type === "hotel" || 
+          type === "motel"
+        )) {
+          return null;
+        }
+
         if (!place.geometry || !place.geometry.location) {
           return null;
         }
@@ -247,8 +259,21 @@ function MapContent() {
     console.log(
       `Searched ${apiSearchRadius}m radius, filtered to ${restaurants.length} restaurants within ${filterDistance}m of route`
     );
+    
+    // Log sample of restaurant types for analysis
+    console.log("=== RESTAURANT TYPES ANALYSIS ===");
+    restaurants.slice(0, 10).forEach((r) => {
+      console.log(`${r.name}:`, r.types);
+    });
+    
+    // Collect all unique types across all restaurants
+    const allTypes = new Set<string>();
+    restaurants.forEach((r) => r.types.forEach((type) => allTypes.add(type)));
+    console.log("All unique types found:", Array.from(allTypes).sort());
+    
     setRestaurants(restaurants);
     setIsSearchingRestaurants(false);
+    setIsRestaurantListOpen(true); // Open the restaurant list panel
   };
 
   return (
@@ -265,6 +290,14 @@ function MapContent() {
         />
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 w-[calc(100%-2rem)] max-w-sm sm:left-4 sm:translate-x-0 sm:w-96">
           <RouteSearch onSearch={handleGetDirection} isLoading={!routeLib} />
+        </div>
+
+        <div>
+          <RestaurantList
+            restaurants={restaurants}
+            isOpen={isRestaurantListOpen}
+            onClose={() => setIsRestaurantListOpen(false)}
+          />
         </div>
       </div>
     </div>
