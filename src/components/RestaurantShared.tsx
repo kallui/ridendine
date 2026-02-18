@@ -97,7 +97,7 @@ export function RestaurantDetails({
         <div className="flex items-center gap-3 mb-2 flex-wrap">
           <div className="flex items-center gap-2">
             {restaurant.rating && (
-              <span className="text-sm font-semibold text-gray-100">
+              <span className="text-sm font-semibold text-text-primary">
                 {restaurant.rating.toFixed(1)}
               </span>
             )}
@@ -150,7 +150,7 @@ export function RestaurantDetails({
 
       {/* Google Maps Link */}
       {isCard ? (
-        <span className="inline-flex items-center gap-1 text-sm text-emerald-400 font-medium">
+        <span className="inline-flex items-center gap-1 text-sm text-primary font-medium">
           <span>View on Google Maps</span>
           <svg
             className="w-4 h-4"
@@ -171,7 +171,7 @@ export function RestaurantDetails({
           href={`https://www.google.com/maps/search/?api=1&query=Google&query_place_id=${restaurant.placeId}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition-colors w-full justify-center shadow-sm"
+          className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-primary hover:bg-primary-hover text-white text-sm font-medium rounded-lg transition-colors w-full justify-center shadow-sm"
         >
           <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
             <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />

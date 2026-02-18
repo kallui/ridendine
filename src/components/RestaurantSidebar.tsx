@@ -21,20 +21,20 @@ export default function RestaurantSidebar({
     <>
       {/* Sidebar */}
       <div
-        className={`absolute top-0 right-0 h-full bg-[#2a2a2a] shadow-2xl border-l border-gray-800 transition-all duration-300 ease-in-out z-20 ${
+        className={`absolute top-0 right-0 h-full bg-card-bg shadow-2xl border-l border-gray-800 transition-all duration-300 ease-in-out z-20 ${
           isCollapsed ? "w-0" : "w-96"
         }`}
       >
         {!isCollapsed && (
           <div className="h-full flex flex-col">
             {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-800 bg-[#2a2a2a]">
-              <h2 className="text-xl font-bold text-gray-100">
+            <div className="flex items-center justify-between p-4 border-b border-gray-800 bg-card-bg">
+              <h2 className="text-xl font-bold text-text-primary">
                 Restaurants ({restaurants.length})
               </h2>
               <button
                 onClick={() => setIsCollapsed(true)}
-                className="p-2 hover:bg-[#1a1a1a] rounded-lg transition-colors"
+                className="p-2 hover:bg-app-bg rounded-lg transition-colors"
                 aria-label="Collapse sidebar"
               >
                 <svg
@@ -71,7 +71,7 @@ export default function RestaurantSidebar({
       {isCollapsed && (
         <button
           onClick={() => setIsCollapsed(false)}
-          className="absolute top-1/2 right-4 -translate-y-1/2 z-20 bg-[#2a2a2a] shadow-lg border border-gray-800 p-3 rounded-full hover:bg-[#1a1a1a] transition-colors"
+          className="absolute top-1/2 right-4 -translate-y-1/2 z-20 bg-card-bg shadow-lg border border-gray-800 p-3 rounded-full hover:bg-app-bg transition-colors"
           aria-label="Expand sidebar"
         >
           <svg

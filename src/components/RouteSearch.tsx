@@ -73,7 +73,7 @@ export default function RouteSearch({ onSearch, isLoading }: RouteSearchProps) {
       />
 
       <button
-        className="w-full bg-emerald-600 text-white py-3 px-4 rounded-md hover:bg-emerald-700 transition-colors font-medium shadow-sm disabled:bg-gray-400 disabled:cursor-not-allowed"
+        className="w-full bg-primary text-white py-3 px-4 rounded-md hover:bg-primary-hover transition-colors font-medium shadow-sm disabled:bg-gray-400 disabled:cursor-not-allowed"
         type="submit"
         disabled={isLoading}
       >
@@ -85,7 +85,7 @@ export default function RouteSearch({ onSearch, isLoading }: RouteSearchProps) {
         type="button"
         onClick={handlePresetSearch}
         disabled={isLoading}
-        className="w-full bg-[#1a1a1a] text-gray-300 py-2 px-4 rounded-md hover:bg-[#0a0a0a] transition-colors text-sm font-medium border border-gray-800 disabled:bg-[#1a1a1a] disabled:cursor-not-allowed"
+        className="w-full bg-app-bg text-gray-300 py-2 px-4 rounded-md hover:bg-black transition-colors text-sm font-medium border border-gray-800 disabled:bg-app-bg disabled:cursor-not-allowed"
       >
         🧪 Test: Crowley Dr → WorkSafeBC Richmond
       </button>

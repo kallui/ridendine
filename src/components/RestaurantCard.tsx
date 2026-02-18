@@ -18,10 +18,10 @@ export default function RestaurantCard({
       target="_blank"
       rel="noopener noreferrer"
       onClick={() => onClick(restaurant)}
-      className="block bg-[#2a2a2a] border-2 border-gray-700 rounded-lg p-4 hover:shadow-lg hover:shadow-emerald-500/20 hover:border-emerald-500 transition-all cursor-pointer no-underline"
+      className="block bg-card-bg border-2 border-border rounded-lg p-4 hover:shadow-lg hover:shadow-primary/20 hover:border-primary transition-all cursor-pointer no-underline"
     >
       {/* Restaurant Name */}
-      <h3 className="font-bold text-lg text-gray-100 mb-2 line-clamp-1">
+      <h3 className="font-bold text-lg text-text-primary mb-2 line-clamp-1">
         {restaurant.name}
       </h3>
 
