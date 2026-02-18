@@ -3,6 +3,7 @@
 import Map from "@/components/Map";
 import Navbar from "@/components/Navbar";
 import RouteSearch from "@/components/RouteSearch";
+import RestaurantSidebar from "@/components/RestaurantSidebar";
 import { APIProvider, useMapsLibrary } from "@vis.gl/react-google-maps";
 import { useState } from "react";
 import * as turf from "@turf/turf";
@@ -13,6 +14,10 @@ export type Restaurant = {
   location: { lat: number; lng: number };
   distanceFromRoute: number;
   types: string[];
+  rating?: number; // 1.0 to 5.0
+  userRatingsTotal?: number; // Number of reviews
+  priceLevel?: number; // 0 to 4 (0=free, 1=$, 2=$$, 3=$$$, 4=$$$$)
+  vicinity?: string; // Short address like "123 Main St, San Francisco"
 };
 
 export type SearchCircle = {
@@ -57,7 +62,7 @@ function MapContent() {
         } else {
           console.error("Error fetching directions:", status);
         }
-      }
+      },
     );
   };
 
@@ -71,7 +76,7 @@ function MapContent() {
         step.path.map((coord) => ({
           lat: coord.lat(),
           lng: coord.lng(),
-        }))
+        })),
       );
 
     // Search for restaurants within 1000m of route
@@ -82,7 +87,7 @@ function MapContent() {
 
   const searchRestaurants = (
     polylineCoordinates: google.maps.LatLngLiteral[],
-    filterDistance: number
+    filterDistance: number,
   ) => {
     console.log("Hello winnie");
     if (!placesLib) {
@@ -118,7 +123,7 @@ function MapContent() {
     console.log(
       `Route is ${routeLength.toFixed(1)}km, will make ${
         searchPoints.length
-      } Places API calls`
+      } Places API calls`,
     );
 
     // Perform multiple searches and collect all results
@@ -150,10 +155,10 @@ function MapContent() {
             processAllResults(
               Object.values(allPlaces),
               polylineCoordinates,
-              filterDistance
+              filterDistance,
             );
           }
-        }
+        },
       );
     });
   };
@@ -161,10 +166,10 @@ function MapContent() {
   const processAllResults = (
     results: google.maps.places.PlaceResult[],
     polylineCoordinates: google.maps.LatLngLiteral[],
-    filterDistance: number
+    filterDistance: number,
   ) => {
     console.log(
-      `Collected ${results.length} unique restaurants from all searches`
+      `Collected ${results.length} unique restaurants from all searches`,
     );
 
     // Validate coordinates
@@ -173,7 +178,7 @@ function MapContent() {
         typeof c.lat === "number" &&
         typeof c.lng === "number" &&
         !isNaN(c.lat) &&
-        !isNaN(c.lng)
+        !isNaN(c.lng),
     );
 
     if (validCoordinates.length < 2) {
@@ -221,7 +226,7 @@ function MapContent() {
           const distance = turf.pointToLineDistance(
             restaurantPoint,
             routeLine,
-            { units: "meters" }
+            { units: "meters" },
           );
 
           // Filter: Keep only within filter distance
@@ -236,6 +241,10 @@ function MapContent() {
             location: { lat, lng },
             distanceFromRoute: Math.round(distance),
             types: place.types || [],
+            rating: place.rating,
+            userRatingsTotal: place.user_ratings_total,
+            priceLevel: place.price_level,
+            vicinity: place.vicinity,
           };
         } catch {
           // Silently skip restaurants that cause errors
@@ -245,7 +254,7 @@ function MapContent() {
       .filter((restaurant): restaurant is Restaurant => restaurant !== null);
 
     console.log(
-      `Searched ${apiSearchRadius}m radius, filtered to ${restaurants.length} restaurants within ${filterDistance}m of route`
+      `Searched ${apiSearchRadius}m radius, filtered to ${restaurants.length} restaurants within ${filterDistance}m of route`,
     );
     setRestaurants(restaurants);
     setIsSearchingRestaurants(false);
@@ -266,6 +275,14 @@ function MapContent() {
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 w-[calc(100%-2rem)] max-w-sm sm:left-4 sm:translate-x-0 sm:w-96">
           <RouteSearch onSearch={handleGetDirection} isLoading={!routeLib} />
         </div>
+
+        {/* Restaurant Sidebar */}
+        <RestaurantSidebar
+          restaurants={restaurants}
+          onRestaurantClick={(restaurant) =>
+            console.log("Clicked:", restaurant.name)
+          }
+        />
       </div>
     </div>
   );
@@ -274,7 +291,7 @@ function MapContent() {
 export default function Home() {
   console.log(
     "API Key loaded:",
-    process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ? "YES" : "NO"
+    process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ? "YES" : "NO",
   );
 
   return (

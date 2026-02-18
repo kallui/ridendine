@@ -39,18 +39,18 @@
 
 - `ARCHITECTURE.md` - Technical architecture and API strategy
 - `LEARNING_PATH.md` - 15-step learning guide with phases
-- Progress: Currently on Step 8 (Restaurant Search & Filtering)
-  - ✅ Step 7 completed: Directions API with transit routes displaying
-  - 🔄 Step 8 in progress: Implementing polyline-based restaurant filtering
+- `KANBAN.md` - Project task board (In Progress, Completed, Backlog)
+- Progress: Currently on Step 9 (Restaurant Display UI)
+  - ✅ Step 8 completed: Polyline-based restaurant filtering with Turf.js
+  - 🔄 Step 9 in progress: Building restaurant list sidebar with search & filters
 
-## Restaurant Filtering Implementation Plan
+## Project Tracking
 
-1. **Install Turf.js**: `npm install @turf/turf`
-2. **Extract Polyline**: Get all coordinates from transit steps in DirectionsResult
-3. **Search Restaurants**: Places API nearbySearch within route bounds
-4. **Filter Client-Side**: Use `turf.pointToLineDistance()` to keep only restaurants within 500m
-5. **Display Markers**: Render restaurant markers on map using `AdvancedMarker` component
-6. **Show Info**: Display restaurant name, distance from route, and Google Maps link
+- **Always update `KANBAN.md`** when tasks are started, completed, or new features are added
+- Move tasks between sections: Backlog → In Progress → Completed
+- Add new ideas to "Ideas / Parking Lot" section
+- Track known issues in "Known Issues" section
+- Keep user informed of progress by referencing the Kanban board
 
 ## When User Asks Questions
 

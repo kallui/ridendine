@@ -32,6 +32,15 @@ export default function RouteSearch({ onSearch, isLoading }: RouteSearchProps) {
     onSearch(origin, destination);
   };
 
+  const handlePresetSearch = () => {
+    const presetOrigin = "3433 Crowley Dr, Vancouver, BC V5R 6C5, Canada";
+    const presetDestination =
+      "6951 Westminster Hwy, Richmond, BC V7C 1C6, Canada";
+    setOrigin(presetOrigin);
+    setDestination(presetDestination);
+    onSearch(presetOrigin, presetDestination);
+  };
+
   return (
     <form
       className="bg-white p-6 rounded-lg shadow-xl flex flex-col gap-4"
@@ -69,6 +78,16 @@ export default function RouteSearch({ onSearch, isLoading }: RouteSearchProps) {
         disabled={isLoading}
       >
         {isLoading ? "Loading..." : "Search"}
+      </button>
+
+      {/* Preset Test Button */}
+      <button
+        type="button"
+        onClick={handlePresetSearch}
+        disabled={isLoading}
+        className="w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-200 transition-colors text-sm font-medium disabled:bg-gray-100 disabled:cursor-not-allowed"
+      >
+        🧪 Test: Crowley Dr → WorkSafeBC Richmond
       </button>
     </form>
   );
