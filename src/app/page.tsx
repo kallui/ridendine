@@ -2,9 +2,9 @@
 
 import Map from "@/components/Map";
 import Navbar from "@/components/Navbar";
-import RestaurantList from "@/components/RestaurantList";
 import RouteSearch from "@/components/RouteSearch";
 import RestaurantSidebar from "@/components/RestaurantSidebar";
+import RouteSelectionPanel from "@/components/RouteSelectionPanel";
 import { APIProvider, useMapsLibrary } from "@vis.gl/react-google-maps";
 import { useState } from "react";
 import * as turf from "@turf/turf";
@@ -33,12 +33,31 @@ function MapContent() {
   const searchInterval = 2.5; // Sample points along route every X km for API searches
 
   // === STATE ===
-  const [route, setRoute] = useState<google.maps.DirectionsResult | null>(null);
-  const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
+  const [routes, setRoutes] = useState<google.maps.DirectionsRoute[]>([]); // All route alternatives
+  const [selectedRouteIndex, setSelectedRouteIndex] = useState<number | null>(
+    null,
+  ); // Which route user picked
+  const [directionsResult, setDirectionsResult] =
+    useState<google.maps.DirectionsResult | null>(null); // Full API response
+  // Cache: keyed by route index so we never re-search a route the user already visited
+  const [restaurantCache, setRestaurantCache] = useState<{
+    [routeIndex: number]: Restaurant[];
+  }>({});
+  const [searchCircleCache, setSearchCircleCache] = useState<{
+    [routeIndex: number]: SearchCircle[];
+  }>({});
   const [isSearchingRestaurants, setIsSearchingRestaurants] = useState(false);
-  const [searchCircles, setSearchCircles] = useState<SearchCircle[]>([]);
   const [showBounds, setShowBounds] = useState(true);
-  const [isRestaurantListOpen, setIsRestaurantListOpen] = useState(false);
+
+  // Derived: restaurants/circles for the currently selected route (or empty if none selected)
+  const restaurants =
+    selectedRouteIndex !== null
+      ? (restaurantCache[selectedRouteIndex] ?? [])
+      : [];
+  const searchCircles =
+    selectedRouteIndex !== null
+      ? (searchCircleCache[selectedRouteIndex] ?? [])
+      : [];
 
   // === MAP LIBRARIES ===
   const routeLib = useMapsLibrary("routes");
@@ -57,11 +76,17 @@ function MapContent() {
         origin: origin,
         destination: destination,
         travelMode: routeLib.TravelMode.TRANSIT,
+        provideRouteAlternatives: true, // Request 2-3 alternative routes
       },
       (result, status) => {
         if (status === routeLib.DirectionsStatus.OK && result) {
-          setRoute(result);
-          extractPolylineFromRoute(result);
+          console.log(`Found ${result.routes.length} route(s)`);
+          setDirectionsResult(result);
+          setRoutes(result.routes);
+          // Don't search restaurants yet - wait for user to pick a route
+          setSelectedRouteIndex(null);
+          setRestaurantCache({}); // Clear cache on new search
+          setSearchCircleCache({});
         } else {
           console.error("Error fetching directions:", status);
         }
@@ -69,8 +94,11 @@ function MapContent() {
     );
   };
 
-  const extractPolylineFromRoute = (result: google.maps.DirectionsResult) => {
-    const steps = result.routes[0].legs[0].steps;
+  const extractPolylineFromRoute = (
+    route: google.maps.DirectionsRoute,
+    routeIndex: number,
+  ) => {
+    const steps = route.legs[0].steps;
 
     // Extract coordinates from all steps (walking + transit)
     const polylineCoordinates = steps
@@ -82,17 +110,37 @@ function MapContent() {
         })),
       );
 
-    // Search for restaurants within 1000m of route
-    searchRestaurants(polylineCoordinates, turfFilterDistance);
+    // Search for restaurants within filter distance of route
+    searchRestaurants(polylineCoordinates, turfFilterDistance, routeIndex);
 
     return polylineCoordinates;
+  };
+
+  // Handler: User selects a route from the alternatives
+  const handleRouteSelect = (routeIndex: number) => {
+    setSelectedRouteIndex(routeIndex);
+    // Cache hit: already searched this route, reuse results — no API call
+    if (restaurantCache[routeIndex] !== undefined) {
+      console.log(
+        `%c✅ Route ${routeIndex}: CACHE HIT — ${restaurantCache[routeIndex].length} restaurants (no API call)`,
+        "color: #10b981; font-weight: bold",
+      );
+      return;
+    }
+    // Cache miss: first time selecting this route, search now
+    console.log(
+      `%c🔍 Route ${routeIndex}: CACHE MISS — calling Places API...`,
+      "color: #f59e0b; font-weight: bold",
+    );
+    const selectedRoute = routes[routeIndex];
+    extractPolylineFromRoute(selectedRoute, routeIndex);
   };
 
   const searchRestaurants = (
     polylineCoordinates: google.maps.LatLngLiteral[],
     filterDistance: number,
+    routeIndex: number,
   ) => {
-    console.log("Hello winnie");
     if (!placesLib) {
       console.error("Places library not loaded yet");
       return;
@@ -116,15 +164,15 @@ function MapContent() {
       searchPoints.push({ lat, lng });
     }
 
-    // Store search circles for visualization (show API search radius)
+    // Store search circles in cache for this route
     const circles: SearchCircle[] = searchPoints.map((center) => ({
       center,
       radius: apiSearchRadius,
     }));
-    setSearchCircles(circles);
+    setSearchCircleCache((prev) => ({ ...prev, [routeIndex]: circles }));
 
     console.log(
-      `Route is ${routeLength.toFixed(1)}km, will make ${
+      `Route ${routeIndex}: ${routeLength.toFixed(1)}km, making ${
         searchPoints.length
       } Places API calls`,
     );
@@ -159,6 +207,7 @@ function MapContent() {
               Object.values(allPlaces),
               polylineCoordinates,
               filterDistance,
+              routeIndex,
             );
           }
         },
@@ -170,6 +219,7 @@ function MapContent() {
     results: google.maps.places.PlaceResult[],
     polylineCoordinates: google.maps.LatLngLiteral[],
     filterDistance: number,
+    routeIndex: number,
   ) => {
     console.log(
       `Collected ${results.length} unique restaurants from all searches`,
@@ -267,23 +317,12 @@ function MapContent() {
       .filter((restaurant): restaurant is Restaurant => restaurant !== null);
 
     console.log(
-      `Searched ${apiSearchRadius}m radius, filtered to ${restaurants.length} restaurants within ${filterDistance}m of route`,
+      `Route ${routeIndex}: searched ${apiSearchRadius}m radius, found ${restaurants.length} restaurants within ${filterDistance}m`,
     );
 
-    // Log sample of restaurant types for analysis
-    console.log("=== RESTAURANT TYPES ANALYSIS ===");
-    restaurants.slice(0, 10).forEach((r) => {
-      console.log(`${r.name}:`, r.types);
-    });
-
-    // Collect all unique types across all restaurants
-    const allTypes = new Set<string>();
-    restaurants.forEach((r) => r.types.forEach((type) => allTypes.add(type)));
-    console.log("All unique types found:", Array.from(allTypes).sort());
-
-    setRestaurants(restaurants);
+    // Store in cache so switching back to this route is free
+    setRestaurantCache((prev) => ({ ...prev, [routeIndex]: restaurants }));
     setIsSearchingRestaurants(false);
-    setIsRestaurantListOpen(true); // Open the restaurant list panel
   };
 
   return (
@@ -291,15 +330,38 @@ function MapContent() {
       <Navbar />
       <div className="flex-1 relative">
         <Map
-          centerCoordinate={{ lat: 37.7749, lng: -122.4194 }}
+          centerCoordinate={{ lat: 49.2827, lng: -123.1207 }}
           zoomLevel={12}
-          route={route}
+          directionsResult={directionsResult}
+          routes={routes}
+          selectedRouteIndex={selectedRouteIndex}
           restaurants={restaurants}
           searchCircles={searchCircles}
           showBounds={showBounds}
         />
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 w-[calc(100%-2rem)] max-w-sm sm:left-4 sm:translate-x-0 sm:w-96">
-          <RouteSearch onSearch={handleGetDirection} isLoading={!routeLib} />
+        {/* Left column: search bar always on top, route panel fills remaining space */}
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 bottom-10 z-10 w-[calc(100%-2rem)] max-w-sm sm:left-4 sm:translate-x-0 sm:w-96 flex flex-col gap-2 pointer-events-none">
+          <div className="pointer-events-auto">
+            <RouteSearch onSearch={handleGetDirection} isLoading={!routeLib} />
+          </div>
+
+          {/* Route Selection Panel - fills remaining height and scrolls */}
+          {routes.length > 0 && (
+            <div className="pointer-events-auto flex-1 min-h-0">
+              <RouteSelectionPanel
+                routes={routes}
+                selectedRouteIndex={selectedRouteIndex}
+                onRouteSelect={handleRouteSelect}
+                onBack={() => {
+                  setRoutes([]);
+                  setDirectionsResult(null);
+                  setSelectedRouteIndex(null);
+                  setRestaurantCache({});
+                  setSearchCircleCache({});
+                }}
+              />
+            </div>
+          )}
         </div>
 
         {/* Restaurant Sidebar */}

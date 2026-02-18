@@ -1,6 +1,6 @@
 # Ride'N'Dine - Project Kanban Board
 
-Last Updated: February 17, 2026
+Last Updated: February 17, 2026 (session 2)
 
 ---
 
@@ -8,7 +8,6 @@ Last Updated: February 17, 2026
 
 ### Restaurant List Sidebar (Phase 1)
 
-- [ ] Make sidebar resizable (drag to adjust width)
 - [ ] Add search by name (client-side filtering)
 - [ ] Add distance filter (< 200m, < 500m, < 750m)
 - [ ] Add rating filter (minimum rating selector)
@@ -20,12 +19,47 @@ Last Updated: February 17, 2026
 
 ## ✅ Completed
 
+### UI/UX Polish — Session 2
+
+- [x] Route alternatives with transit details (line name + headsign per leg, vehicle icon)
+- [x] Per-route restaurant caching (cache hit = free, cache miss = new API call)
+- [x] RouteSelectionPanel: ← Change button to go back to search form
+- [x] Scrollable route list with styled scrollbar (4px, dark theme, -mr-2 positioning)
+- [x] Bottom-10 clearance on all panels (Google Maps attribution always visible)
+- [x] Place name + address format in autocomplete inputs ("WorkSafeBC, 6450 Roberts St...")
+- [x] Navbar title links to homepage
+- [x] Default map center set to Vancouver BC
+- [x] Sidebar visual separation from navbar (top-4 gap, rounded left corners, border all sides)
+- [x] Origin/destination visual indicator in RouteSearch (hollow ring → chevrons → diamond)
+- [x] Swap button (⇅) between origin/destination inputs
+
+### Route Selection Feature (Step 10)
+
+- [x] Add `provideRouteAlternatives: true` to DirectionsService request
+- [x] Add state management for storing multiple routes (`routes` array, `selectedRouteIndex`)
+- [x] Create `RouteOptionCard` component (displays duration, distance, transfers, mode icons)
+- [x] Create `RouteSelectionPanel` component (route selection UI)
+- [x] Update Map to display all routes with different styling (selected = solid green, others = transparent gray)
+- [x] Refactor: Only trigger restaurant search when user selects a route (not on initial search)
+- [x] UI: Route selection panel appears after search, before sidebar
+
+### UI/UX Polish & Bug Fixes
+
+- [x] Centralize color system in globals.css (Tailwind CSS 4 approach)
+- [x] Replace hardcoded hex colors with semantic names (bg-card-bg, text-primary, etc.)
+- [x] Fix page-level scrollbars (overflow: hidden on html/body)
+- [x] Disable empty info windows on origin/destination markers
+- [x] Delete unused RestaurantInfoWindow.tsx
+- [x] Rename CustomInfoWindow → RestaurantMarkerPopup for clarity
+- [x] Make entire restaurant card clickable (link to Google Maps)
+
 ### Code Refactoring & Improvements
 
 - [x] Extract shared restaurant display logic to RestaurantShared.tsx
 - [x] Create reusable RestaurantDetails component (card + infowindow variants)
-- [x] Fix rating text color (emerald-400 for better visibility on dark theme)
+- [x] Fix rating text color (white for better visibility on dark theme)
 - [x] Prevent future inconsistencies between card and info window displays
+- [x] Component organization and naming conventions
 
 ### Restaurant Display UI (Step 9)
 

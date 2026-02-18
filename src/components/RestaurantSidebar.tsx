@@ -21,7 +21,7 @@ export default function RestaurantSidebar({
     <>
       {/* Sidebar */}
       <div
-        className={`absolute top-0 right-0 h-full bg-card-bg shadow-2xl border-l border-gray-800 transition-all duration-300 ease-in-out z-20 ${
+        className={`absolute top-4 right-0 bottom-10 bg-card-bg shadow-2xl border border-gray-800 rounded-tl-xl rounded-bl-xl transition-all duration-300 ease-in-out z-20 ${
           isCollapsed ? "w-0" : "w-96"
         }`}
       >
@@ -54,14 +54,16 @@ export default function RestaurantSidebar({
             </div>
 
             {/* Restaurant List */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {restaurants.map((restaurant) => (
-                <RestaurantCard
-                  key={restaurant.placeId}
-                  restaurant={restaurant}
-                  onClick={onRestaurantClick}
-                />
-              ))}
+            <div className="relative flex-1 min-h-0">
+              <div className="overflow-y-auto h-full p-4 pb-8 space-y-3">
+                {restaurants.map((restaurant) => (
+                  <RestaurantCard
+                    key={restaurant.placeId}
+                    restaurant={restaurant}
+                    onClick={onRestaurantClick}
+                  />
+                ))}
+              </div>
             </div>
           </div>
         )}

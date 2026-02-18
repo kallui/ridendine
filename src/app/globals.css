@@ -58,6 +58,26 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* ===================================
+   Custom Scrollbar (dark minimalist)
+   =================================== */
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
 /* Google Maps InfoWindow Dark Theme */
 .gm-style .gm-style-iw-c {
   background-color: #2a2a2a !important;

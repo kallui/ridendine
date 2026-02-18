@@ -13,7 +13,9 @@ import RestaurantMarkerPopup from "./RestaurantMarkerPopup";
 interface MapProps {
   centerCoordinate: { lat: number; lng: number };
   zoomLevel: number;
-  route?: google.maps.DirectionsResult | null;
+  directionsResult?: google.maps.DirectionsResult | null;
+  routes: google.maps.DirectionsRoute[];
+  selectedRouteIndex: number | null;
   restaurants: Restaurant[];
   searchCircles: SearchCircle[];
   showBounds: boolean;
@@ -22,42 +24,59 @@ interface MapProps {
 export default function Map({
   centerCoordinate,
   zoomLevel,
-  route,
+  directionsResult,
+  routes,
+  selectedRouteIndex,
   restaurants,
   searchCircles,
   showBounds,
 }: MapProps) {
   const map = useMap();
-  const directionsRendererRef = useRef<google.maps.DirectionsRenderer | null>(
-    null,
-  );
+  const directionsRenderersRef = useRef<google.maps.DirectionsRenderer[]>([]);
   const circlesRef = useRef<google.maps.Circle[]>([]);
   const [selectedRestaurant, setSelectedRestaurant] =
     useState<Restaurant | null>(null);
 
-  // Handle route directions rendering
+  // Handle route directions rendering (show all routes, highlight selected)
   useEffect(() => {
-    console.log("Map useEffect triggered:", {
-      hasMap: !!map,
-      hasRoute: !!route,
+    if (!map || !directionsResult) return;
+
+    // Clear existing renderers
+    directionsRenderersRef.current.forEach((renderer) => renderer.setMap(null));
+    directionsRenderersRef.current = [];
+
+    // Render all routes
+    routes.forEach((route, index) => {
+      const isSelected = selectedRouteIndex === index;
+
+      // Create a temporary DirectionsResult with just this route
+      const singleRouteResult: google.maps.DirectionsResult = {
+        ...directionsResult,
+        routes: [route],
+      };
+
+      const renderer = new google.maps.DirectionsRenderer({
+        suppressMarkers: isSelected, // Hide markers for non-selected routes
+        suppressInfoWindows: true,
+        polylineOptions: {
+          strokeColor: isSelected ? "#10B981" : "#6B7280", // Primary green vs gray
+          strokeWeight: isSelected ? 5 : 3,
+          strokeOpacity: isSelected ? 0.8 : 0.4,
+        },
+      });
+
+      renderer.setMap(map);
+      renderer.setDirections(singleRouteResult);
+      directionsRenderersRef.current.push(renderer);
     });
 
-    if (!map) return;
-
-    if (!directionsRendererRef.current) {
-      console.log("Creating DirectionsRenderer");
-      directionsRendererRef.current = new google.maps.DirectionsRenderer({
-        suppressMarkers: false, // Keep origin/destination markers
-        suppressInfoWindows: true, // Disable default info windows
-      });
-      directionsRendererRef.current.setMap(map);
-    }
-
-    if (route && directionsRendererRef.current) {
-      console.log("Setting directions on map");
-      directionsRendererRef.current.setDirections(route);
-    }
-  }, [map, route]);
+    return () => {
+      directionsRenderersRef.current.forEach((renderer) =>
+        renderer.setMap(null),
+      );
+      directionsRenderersRef.current = [];
+    };
+  }, [map, directionsResult, routes, selectedRouteIndex]);
 
   // Handle search circles visualization
   useEffect(() => {
