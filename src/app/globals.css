@@ -42,6 +42,16 @@
   }
 }
 
+/* Remove default margins and prevent scrollbars */
+html,
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden; /* Prevent page-level scrolling */
+  height: 100%;
+  width: 100%;
+}
+
 body {
   background: var(--app-bg);
   color: var(--text-primary);

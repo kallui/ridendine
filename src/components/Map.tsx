@@ -46,7 +46,10 @@ export default function Map({
 
     if (!directionsRendererRef.current) {
       console.log("Creating DirectionsRenderer");
-      directionsRendererRef.current = new google.maps.DirectionsRenderer();
+      directionsRendererRef.current = new google.maps.DirectionsRenderer({
+        suppressMarkers: false, // Keep origin/destination markers
+        suppressInfoWindows: true, // Disable default info windows
+      });
       directionsRendererRef.current.setMap(map);
     }
 
