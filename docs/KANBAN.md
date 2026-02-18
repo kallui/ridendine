@@ -8,10 +8,7 @@ Last Updated: February 17, 2026
 
 ### Restaurant List Sidebar (Phase 1)
 
-- [ ] Update Restaurant type to include rating, priceLevel, vicinity
-- [ ] Create ResizableSidebar component (resizable + collapsible)
-- [ ] Create RestaurantCard component (name, distance, rating, price, link)
-- [ ] Create RestaurantList component with search & filters
+- [ ] Make sidebar resizable (drag to adjust width)
 - [ ] Add search by name (client-side filtering)
 - [ ] Add distance filter (< 200m, < 500m, < 750m)
 - [ ] Add rating filter (minimum rating selector)
@@ -22,6 +19,19 @@ Last Updated: February 17, 2026
 ---
 
 ## ✅ Completed
+
+### Restaurant Display UI (Step 9)
+
+- [x] Update Restaurant type to include rating, priceLevel, vicinity, userRatingsTotal
+- [x] Create RestaurantCard component with proper styling
+- [x] Create RestaurantSidebar component (collapsible with toggle button)
+- [x] Create RestaurantInfoWindow component for map markers
+- [x] Implement SVG star rating icons (with half-star gradient)
+- [x] Add review count display (formatted as 1.2k for large numbers)
+- [x] Format rating as: "4.2 ⭐⭐⭐⭐☆ (1.2k)"
+- [x] Add price level indicator ($$$$)
+- [x] Add preset test button for easier development testing
+- [x] Fix info window styling and formatting
 
 ### Core Features (Steps 1-8)
 

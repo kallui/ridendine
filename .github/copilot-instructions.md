@@ -37,16 +37,16 @@
 
 ## Reference Documents
 
-- `ARCHITECTURE.md` - Technical architecture and API strategy
-- `LEARNING_PATH.md` - 15-step learning guide with phases
-- `KANBAN.md` - Project task board (In Progress, Completed, Backlog)
+- `docs/ARCHITECTURE.md` - Technical architecture and API strategy
+- `docs/LEARNING_PATH.md` - 15-step learning guide with phases
+- `docs/KANBAN.md` - Project task board (In Progress, Completed, Backlog)
 - Progress: Currently on Step 9 (Restaurant Display UI)
   - ✅ Step 8 completed: Polyline-based restaurant filtering with Turf.js
   - 🔄 Step 9 in progress: Building restaurant list sidebar with search & filters
 
 ## Project Tracking
 
-- **Always update `KANBAN.md`** when tasks are started, completed, or new features are added
+- **Always update `docs/KANBAN.md`** when tasks are started, completed, or new features are added
 - Move tasks between sections: Backlog → In Progress → Completed
 - Add new ideas to "Ideas / Parking Lot" section
 - Track known issues in "Known Issues" section
