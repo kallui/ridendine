@@ -5,11 +5,10 @@ import {
   useMap,
   AdvancedMarker,
   Pin,
-  InfoWindow,
 } from "@vis.gl/react-google-maps";
 import { useEffect, useRef, useState } from "react";
 import { Restaurant, SearchCircle } from "@/app/page";
-import RestaurantInfoWindow from "./RestaurantInfoWindow";
+import RestaurantMarkerPopup from "./RestaurantMarkerPopup";
 
 interface MapProps {
   centerCoordinate: { lat: number; lng: number };
@@ -97,6 +96,7 @@ export default function Map({
       gestureHandling="greedy"
       disableDefaultUI
       mapId={process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID}
+      colorScheme="DARK"
     >
       {/* Restaurant Markers */}
       {restaurants.map((restaurant) => (
@@ -113,14 +113,12 @@ export default function Map({
         </AdvancedMarker>
       ))}
 
-      {/* Info Window for Selected Restaurant */}
+      {/* Custom Info Window for Selected Restaurant */}
       {selectedRestaurant && (
-        <InfoWindow
-          position={selectedRestaurant.location}
-          onCloseClick={() => setSelectedRestaurant(null)}
-        >
-          <RestaurantInfoWindow restaurant={selectedRestaurant} />
-        </InfoWindow>
+        <RestaurantMarkerPopup
+          restaurant={selectedRestaurant}
+          onClose={() => setSelectedRestaurant(null)}
+        />
       )}
     </GoogleMap>
   );

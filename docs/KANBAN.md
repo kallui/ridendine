@@ -20,6 +20,13 @@ Last Updated: February 17, 2026
 
 ## ✅ Completed
 
+### Code Refactoring & Improvements
+
+- [x] Extract shared restaurant display logic to RestaurantShared.tsx
+- [x] Create reusable RestaurantDetails component (card + infowindow variants)
+- [x] Fix rating text color (emerald-400 for better visibility on dark theme)
+- [x] Prevent future inconsistencies between card and info window displays
+
 ### Restaurant Display UI (Step 9)
 
 - [x] Update Restaurant type to include rating, priceLevel, vicinity, userRatingsTotal

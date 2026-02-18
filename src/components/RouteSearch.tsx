@@ -43,7 +43,7 @@ export default function RouteSearch({ onSearch, isLoading }: RouteSearchProps) {
 
   return (
     <form
-      className="bg-white p-6 rounded-lg shadow-xl flex flex-col gap-4"
+      className="bg-[#2a2a2a] p-6 rounded-lg shadow-xl flex flex-col gap-4 border border-gray-800"
       onSubmit={handleSubmit}
     >
       {/* <label htmlFor="origin">Starting Point:</label> */}
@@ -51,9 +51,9 @@ export default function RouteSearch({ onSearch, isLoading }: RouteSearchProps) {
         ref={originAutoComplete.inputRef}
         type="text"
         id="origin"
-        className="w-full px-4 py-2 border border-gray-300 rounded-md 
-             text-gray-900 placeholder:text-gray-500 
-             focus:outline-none focus:ring-2 focus:ring-sky-500"
+        className="w-full px-4 py-2 border border-gray-700 rounded-md 
+             bg-[#1a1a1a] text-gray-100 placeholder:text-gray-500 
+             focus:outline-none focus:ring-2 focus:ring-emerald-500"
         placeholder="Enter starting point"
         value={origin}
         onChange={(e) => setOrigin(e.target.value)}
@@ -64,16 +64,16 @@ export default function RouteSearch({ onSearch, isLoading }: RouteSearchProps) {
         ref={destinationAutoComplete.inputRef}
         type="text"
         id="destination"
-        className="w-full px-4 py-2 border border-gray-300 rounded-md 
-             text-gray-900 placeholder:text-gray-500 
-             focus:outline-none focus:ring-2 focus:ring-sky-500"
+        className="w-full px-4 py-2 border border-gray-700 rounded-md 
+             bg-[#1a1a1a] text-gray-100 placeholder:text-gray-500 
+             focus:outline-none focus:ring-2 focus:ring-emerald-500"
         placeholder="Enter destination"
         value={destination}
         onChange={(e) => setDestination(e.target.value)}
       />
 
       <button
-        className="w-full bg-sky-600 text-white py-3 px-4 rounded-md hover:bg-sky-700 transition-colors font-medium shadow-sm disabled:bg-gray-400 disabled:cursor-not-allowed"
+        className="w-full bg-emerald-600 text-white py-3 px-4 rounded-md hover:bg-emerald-700 transition-colors font-medium shadow-sm disabled:bg-gray-400 disabled:cursor-not-allowed"
         type="submit"
         disabled={isLoading}
       >
@@ -85,7 +85,7 @@ export default function RouteSearch({ onSearch, isLoading }: RouteSearchProps) {
         type="button"
         onClick={handlePresetSearch}
         disabled={isLoading}
-        className="w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-200 transition-colors text-sm font-medium disabled:bg-gray-100 disabled:cursor-not-allowed"
+        className="w-full bg-[#1a1a1a] text-gray-300 py-2 px-4 rounded-md hover:bg-[#0a0a0a] transition-colors text-sm font-medium border border-gray-800 disabled:bg-[#1a1a1a] disabled:cursor-not-allowed"
       >
         🧪 Test: Crowley Dr → WorkSafeBC Richmond
       </button>

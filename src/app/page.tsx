@@ -287,7 +287,7 @@ function MapContent() {
   };
 
   return (
-    <div className="h-screen w-screen flex flex-col">
+    <div className="h-screen w-screen flex flex-col bg-[#1a1a1a]">
       <Navbar />
       <div className="flex-1 relative">
         <Map

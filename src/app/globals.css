@@ -25,11 +25,39 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* Google Maps InfoWindow Dark Theme */
+.gm-style .gm-style-iw-c {
+  background-color: #2a2a2a !important;
+  border-radius: 8px !important;
+  padding: 0 !important;
+  box-shadow: 0 2px 7px 1px rgba(0, 0, 0, 0.5) !important;
+}
+
+.gm-style .gm-style-iw-d {
+  overflow: hidden !important;
+}
+
+.gm-style .gm-style-iw-t::after {
+  background: #2a2a2a !important;
+  box-shadow: -2px 2px 2px 0 rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Close button styling */
+.gm-style .gm-ui-hover-effect {
+  opacity: 1 !important;
+}
+
+.gm-style .gm-ui-hover-effect > span {
+  background-color: #e5e7eb !important;
+}
+
 /* Google Places Autocomplete Styling */
 .pac-container {
   border-radius: 8px;
   margin-top: 4px;
-  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  box-shadow:
+    0 10px 15px -3px rgb(0 0 0 / 0.1),
+    0 4px 6px -4px rgb(0 0 0 / 0.1);
   border: 1px solid #e5e7eb;
   font-family: inherit;
 }
