@@ -24,25 +24,27 @@ export default function RestaurantMarkerPopup({
         {/* Card */}
         <div className="bg-card-bg rounded-lg shadow-2xl border-2 border-border p-4 min-w-[280px] max-w-[320px]">
           {/* Close button */}
-          <button
-            onClick={onClose}
-            className="absolute top-2 right-2 p-1.5 hover:bg-app-bg rounded-full transition-colors"
-            aria-label="Close"
-          >
-            <svg
-              className="w-5 h-5 text-gray-400 hover:text-gray-200"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+          <div className="absolute top-2 right-2">
+            <button
+              onClick={onClose}
+              className="p-1.5 hover:bg-app-bg rounded-full transition-colors"
+              aria-label="Close"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
+              <svg
+                className="w-5 h-5 text-gray-400 hover:text-gray-200"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            </button>
+          </div>
 
           {/* Restaurant Name */}
           <h3 className="font-bold text-base text-text-primary mb-2 leading-tight pr-6">

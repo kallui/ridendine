@@ -48,6 +48,7 @@ function MapContent() {
   }>({});
   const [isSearchingRestaurants, setIsSearchingRestaurants] = useState(false);
   const [showBounds, setShowBounds] = useState(true);
+  const [selectedRestaurant, setSelectedRestaurant] = useState<Restaurant | null>(null);
 
   // Derived: restaurants/circles for the currently selected route (or empty if none selected)
   const restaurants =
@@ -338,6 +339,8 @@ function MapContent() {
           restaurants={restaurants}
           searchCircles={searchCircles}
           showBounds={showBounds}
+          selectedRestaurant={selectedRestaurant}
+          onSelectRestaurant={setSelectedRestaurant}
         />
         {/* Left column: search bar always on top, route panel fills remaining space */}
         <div className="absolute top-4 left-1/2 -translate-x-1/2 bottom-10 z-10 w-[calc(100%-2rem)] max-w-sm sm:left-4 sm:translate-x-0 sm:w-96 flex flex-col gap-2 pointer-events-none">
@@ -367,9 +370,7 @@ function MapContent() {
         {/* Restaurant Sidebar */}
         <RestaurantSidebar
           restaurants={restaurants}
-          onRestaurantClick={(restaurant) =>
-            console.log("Clicked:", restaurant.name)
-          }
+          onRestaurantClick={(restaurant) => setSelectedRestaurant(restaurant)}
         />
       </div>
     </div>

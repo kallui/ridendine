@@ -6,7 +6,7 @@ import {
   AdvancedMarker,
   Pin,
 } from "@vis.gl/react-google-maps";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { Restaurant, SearchCircle } from "@/app/page";
 import RestaurantMarkerPopup from "./RestaurantMarkerPopup";
 
@@ -19,6 +19,8 @@ interface MapProps {
   restaurants: Restaurant[];
   searchCircles: SearchCircle[];
   showBounds: boolean;
+  selectedRestaurant: Restaurant | null;
+  onSelectRestaurant: (restaurant: Restaurant | null) => void;
 }
 
 export default function Map({
@@ -30,12 +32,19 @@ export default function Map({
   restaurants,
   searchCircles,
   showBounds,
+  selectedRestaurant,
+  onSelectRestaurant,
 }: MapProps) {
   const map = useMap();
   const directionsRenderersRef = useRef<google.maps.DirectionsRenderer[]>([]);
   const circlesRef = useRef<google.maps.Circle[]>([]);
-  const [selectedRestaurant, setSelectedRestaurant] =
-    useState<Restaurant | null>(null);
+
+  // Pan + zoom to restaurant when selected from sidebar
+  useEffect(() => {
+    if (!map || !selectedRestaurant) return;
+    map.panTo(selectedRestaurant.location);
+    map.setZoom(17);
+  }, [map, selectedRestaurant]);
 
   // Handle route directions rendering (show all routes, highlight selected)
   useEffect(() => {
@@ -125,7 +134,7 @@ export default function Map({
         <AdvancedMarker
           key={restaurant.placeId}
           position={restaurant.location}
-          onClick={() => setSelectedRestaurant(restaurant)}
+          onClick={() => onSelectRestaurant(restaurant)}
         >
           <Pin
             background={"#EF4444"}
@@ -139,7 +148,7 @@ export default function Map({
       {selectedRestaurant && (
         <RestaurantMarkerPopup
           restaurant={selectedRestaurant}
-          onClose={() => setSelectedRestaurant(null)}
+          onClose={() => onSelectRestaurant(null)}
         />
       )}
     </GoogleMap>

@@ -10,18 +10,13 @@ export default function RestaurantCard({
   restaurant,
   onClick,
 }: RestaurantCardProps) {
-  const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=Google&query_place_id=${restaurant.placeId}`;
-
   return (
-    <a
-      href={googleMapsUrl}
-      target="_blank"
-      rel="noopener noreferrer"
+    <div
       onClick={() => onClick(restaurant)}
-      className="block bg-card-bg border-2 border-border rounded-lg p-4 hover:shadow-lg hover:shadow-primary/20 hover:border-primary transition-all cursor-pointer no-underline"
+      className="bg-card-bg border-2 border-border rounded-lg p-4 hover:shadow-lg hover:shadow-primary/20 hover:border-primary transition-all cursor-pointer"
     >
       {/* Restaurant Name */}
-      <h3 className="font-bold text-lg text-text-primary mb-2 line-clamp-1">
+      <h3 className="font-bold text-lg text-text-primary line-clamp-1 mb-2">
         {restaurant.name}
       </h3>
 
@@ -31,6 +26,6 @@ export default function RestaurantCard({
         variant="card"
         onClick={() => onClick(restaurant)}
       />
-    </a>
+    </div>
   );
 }
