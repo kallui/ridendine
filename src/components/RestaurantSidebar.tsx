@@ -22,11 +22,18 @@ const RATING_OPTIONS = [
 interface RestaurantSidebarProps {
   restaurants: Restaurant[];
   onRestaurantClick: (restaurant: Restaurant) => void;
+  variant?: "desktop" | "sheet";
+  onBack?: () => void;
+  // sheet variant only: shows selected route summary above filters
+  routeHeadline?: string;
 }
 
 export default function RestaurantSidebar({
   restaurants,
   onRestaurantClick,
+  variant = "desktop",
+  onBack,
+  routeHeadline,
 }: RestaurantSidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -56,11 +63,99 @@ export default function RestaurantSidebar({
 
   if (restaurants.length === 0) return null;
 
+  // Sheet variant: content-only for inside BottomSheet.
+  // Filters are sticky so they stay visible while the list scrolls.
+  // No outer container — BottomSheet provides positioning and scroll.
+  if (variant === "sheet") {
+    return (
+      <div>
+        {/* sticky top-0 inside overflow-y-auto sticks to the scroll container, not the viewport */}
+        <div className="sticky top-0 bg-card-bg px-4 py-3 border-b border-gray-800 space-y-2 z-10">
+          {/* Back button + route summary — only shown in sheet variant */}
+          {onBack && (
+            <div className="flex items-center justify-between gap-2">
+              <button
+                onClick={onBack}
+                className="text-text-secondary hover:text-text-primary text-sm flex items-center gap-1 transition-colors shrink-0"
+              >
+                ← Change route
+              </button>
+              {routeHeadline && (
+                <span className="text-text-muted text-xs truncate text-right">
+                  {routeHeadline}
+                </span>
+              )}
+            </div>
+          )}
+          <input
+            type="text"
+            placeholder="Search restaurants..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full px-4 py-2 border border-gray-700 rounded-md bg-app-bg text-gray-100 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
+          />
+          <div className="flex items-center justify-between">
+            <div className="flex gap-1">
+              {RATING_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() =>
+                    setMinRating(minRating === opt.value ? 0 : opt.value)
+                  }
+                  className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+                    minRating === opt.value
+                      ? "bg-primary text-white"
+                      : "bg-app-bg text-text-muted border border-gray-700 hover:border-primary/50 hover:text-text-secondary"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-1">
+              {(["distance", "rating"] as const).map((opt) => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => setSortBy(sortBy === opt ? "best" : opt)}
+                  className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+                    sortBy === opt
+                      ? "bg-primary text-white"
+                      : "bg-app-bg text-text-muted border border-gray-700 hover:border-primary/50 hover:text-text-secondary"
+                  }`}
+                >
+                  {opt === "distance" ? "Nearest" : "Top rated"}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        {/* List — no inner scroll, BottomSheet's overflow-y-auto handles it */}
+        <div className="p-4 space-y-3 pb-8">
+          {filteredRestaurants.length === 0 ? (
+            <p className="text-text-muted text-sm text-center pt-8">
+              No restaurants match your filters.
+            </p>
+          ) : (
+            filteredRestaurants.map((restaurant) => (
+              <RestaurantCard
+                key={restaurant.placeId}
+                restaurant={restaurant}
+                onClick={onRestaurantClick}
+              />
+            ))
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
-      {/* Sidebar */}
+      {/* Sidebar — hidden on mobile (BottomSheet handles mobile) */}
       <div
-        className={`absolute top-4 right-0 bottom-10 bg-card-bg shadow-2xl border border-gray-800 rounded-tl-xl rounded-bl-xl transition-all duration-300 ease-in-out z-20 ${
+        className={`hidden sm:block absolute top-4 right-0 bottom-10 bg-card-bg shadow-2xl border border-gray-800 rounded-tl-xl rounded-bl-xl transition-all duration-300 ease-in-out z-20 ${
           isCollapsed ? "w-0" : "w-96"
         }`}
       >
@@ -170,11 +265,11 @@ export default function RestaurantSidebar({
         )}
       </div>
 
-      {/* Expand Button (when collapsed) */}
+      {/* Expand Button (when collapsed) — hidden on mobile */}
       {isCollapsed && (
         <button
           onClick={() => setIsCollapsed(false)}
-          className="absolute top-1/2 right-4 -translate-y-1/2 z-20 bg-card-bg shadow-lg border border-gray-800 p-3 rounded-full hover:bg-app-bg transition-colors"
+          className="hidden sm:block absolute top-1/2 right-4 -translate-y-1/2 z-20 bg-card-bg shadow-lg border border-gray-800 p-3 rounded-full hover:bg-app-bg transition-colors"
           aria-label="Expand sidebar"
         >
           <svg

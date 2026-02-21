@@ -21,6 +21,7 @@ interface MapProps {
   showBounds: boolean;
   selectedRestaurant: Restaurant | null;
   onSelectRestaurant: (restaurant: Restaurant | null) => void;
+  onMapClick?: () => void; // called when the map background is tapped (not a marker)
 }
 
 export default function Map({
@@ -34,6 +35,7 @@ export default function Map({
   showBounds,
   selectedRestaurant,
   onSelectRestaurant,
+  onMapClick,
 }: MapProps) {
   const map = useMap();
   const directionsRenderersRef = useRef<google.maps.DirectionsRenderer[]>([]);
@@ -128,6 +130,7 @@ export default function Map({
       disableDefaultUI
       mapId={process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID}
       colorScheme="DARK"
+      onClick={onMapClick}
     >
       {/* Restaurant Markers */}
       {restaurants.map((restaurant) => (

@@ -42,6 +42,15 @@ export default function RouteSearch({ onSearch, isLoading }: RouteSearchProps) {
     }
   }, [destinationAutoComplete.selectedPlace]);
 
+  // Auto-search when both fields are filled via autocomplete selection.
+  // We watch selectedPlace (not origin/destination strings) so this only fires
+  // on dropdown picks — not on every keystroke or swap.
+  useEffect(() => {
+    const o = originAutoComplete.selectedPlace?.formatted_address;
+    const d = destinationAutoComplete.selectedPlace?.formatted_address;
+    if (o && d) onSearch(o, d);
+  }, [originAutoComplete.selectedPlace, destinationAutoComplete.selectedPlace]);
+
   const handleSwap = () => {
     setOrigin(destination);
     setDestination(origin);
@@ -65,7 +74,7 @@ export default function RouteSearch({ onSearch, isLoading }: RouteSearchProps) {
 
   return (
     <form
-      className="bg-[#2a2a2a] p-6 rounded-lg shadow-xl flex flex-col gap-4 border border-gray-800"
+      className="bg-[#2a2a2a] p-3 sm:p-6 rounded-lg shadow-xl flex flex-col gap-2 sm:gap-4 border border-gray-800"
       onSubmit={handleSubmit}
     >
       {/* Origin + Destination with route line indicator */}
@@ -142,37 +151,60 @@ export default function RouteSearch({ onSearch, isLoading }: RouteSearchProps) {
             </button>
           </div>
 
-          <input
-            ref={destinationAutoComplete.inputRef}
-            type="text"
-            id="destination"
-            className="w-full px-4 py-2 border border-gray-700 rounded-md 
-                 bg-[#1a1a1a] text-gray-100 placeholder:text-gray-500 
-                 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            placeholder="Destination"
-            value={destinationLabel}
-            onChange={(e) => {
-              setDestinationLabel(e.target.value);
-              setDestination(e.target.value);
-            }}
-          />
+          {/* Destination input — search icon sits inside on mobile */}
+          <div className="relative">
+            <input
+              ref={destinationAutoComplete.inputRef}
+              type="text"
+              id="destination"
+              className="w-full px-4 py-2 sm:pr-4 pr-10 border border-gray-700 rounded-md
+                   bg-[#1a1a1a] text-gray-100 placeholder:text-gray-500
+                   focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              placeholder="Destination"
+              value={destinationLabel}
+              onChange={(e) => {
+                setDestinationLabel(e.target.value);
+                setDestination(e.target.value);
+              }}
+            />
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="sm:hidden absolute right-2 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-primary disabled:text-gray-600 transition-colors"
+              aria-label="Search"
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
 
       <button
-        className="w-full bg-primary text-white py-3 px-4 rounded-md hover:bg-primary-hover transition-colors font-medium shadow-sm disabled:bg-gray-400 disabled:cursor-not-allowed"
+        className="hidden sm:block w-full bg-primary text-white py-2 sm:py-3 px-4 rounded-md hover:bg-primary-hover transition-colors font-medium shadow-sm disabled:bg-gray-400 disabled:cursor-not-allowed"
         type="submit"
         disabled={isLoading}
       >
         {isLoading ? "Loading..." : "Search"}
       </button>
 
-      {/* Preset Test Button */}
+      {/* Preset Test Button — dev tool, hidden on mobile */}
       <button
         type="button"
         onClick={handlePresetSearch}
         disabled={isLoading}
-        className="w-full bg-app-bg text-gray-300 py-2 px-4 rounded-md hover:bg-black transition-colors text-sm font-medium border border-gray-800 disabled:bg-app-bg disabled:cursor-not-allowed"
+        className="hidden sm:block w-full bg-app-bg text-gray-300 py-2 px-4 rounded-md hover:bg-black transition-colors text-sm font-medium border border-gray-800 disabled:bg-app-bg disabled:cursor-not-allowed"
       >
         🧪 Test: Crowley Dr → WorkSafeBC Richmond
       </button>

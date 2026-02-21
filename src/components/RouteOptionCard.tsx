@@ -5,6 +5,38 @@ interface RouteOptionCardProps {
   onSelect: (routeIndex: number) => void;
 }
 
+export function getVehicleIcon(type: string): string {
+  const icons: { [key: string]: string } = {
+    BUS: "🚌",
+    SUBWAY: "🚇",
+    TRAIN: "🚆",
+    TRAM: "🚊",
+    RAIL: "🚆",
+    HEAVY_RAIL: "🚆",
+    COMMUTER_TRAIN: "🚆",
+    HIGH_SPEED_TRAIN: "🚄",
+    METRO_RAIL: "🚇",
+  };
+  return icons[type] || "🚌";
+}
+
+export function getRouteHeadline(route: google.maps.DirectionsRoute): string {
+  const leg = route.legs[0];
+  const transitSteps = leg.steps.filter(
+    (step) => step.travel_mode === google.maps.TravelMode.TRANSIT,
+  );
+  if (transitSteps.length === 0) return "🚶 Walk";
+  return transitSteps
+    .map((step) => {
+      const line = step.transit?.line;
+      const icon = getVehicleIcon(line?.vehicle?.type || "");
+      const name = line?.short_name || line?.name || "";
+      return name ? `${icon} ${name}` : null;
+    })
+    .filter(Boolean)
+    .join("   →   ");
+}
+
 export default function RouteOptionCard({
   route,
   routeIndex,
@@ -19,31 +51,8 @@ export default function RouteOptionCard({
   );
   const transfers = Math.max(0, transitSteps.length - 1);
 
-  const getVehicleIcon = (type: string) => {
-    const icons: { [key: string]: string } = {
-      BUS: "🚌",
-      SUBWAY: "🚇",
-      TRAIN: "🚆",
-      TRAM: "🚊",
-      RAIL: "🚆",
-      HEAVY_RAIL: "🚆",
-      COMMUTER_TRAIN: "🚆",
-      HIGH_SPEED_TRAIN: "🚄",
-      METRO_RAIL: "🚇",
-    };
-    return icons[type] || "🚌";
-  };
-
-  // "🚌 R4  →  🚇 Canada Line"
-  const routeHeadline = transitSteps
-    .map((step) => {
-      const line = step.transit?.line;
-      const icon = getVehicleIcon(line?.vehicle?.type || "");
-      const name = line?.short_name || line?.name || "";
-      return name ? `${icon} ${name}` : null;
-    })
-    .filter(Boolean)
-    .join("   →   ");
+  // Use the exported utility
+  const routeHeadline = getRouteHeadline(route);
 
   return (
     <button
@@ -58,7 +67,7 @@ export default function RouteOptionCard({
         <div className="flex-1 min-w-0">
           {/* Transit lines as headline */}
           <div className="font-semibold text-text-primary text-sm truncate">
-            {routeHeadline || "Route"}
+            {routeHeadline}
           </div>
           {/* Duration + transfers */}
           <div className="text-xs text-text-muted mt-0.5">
