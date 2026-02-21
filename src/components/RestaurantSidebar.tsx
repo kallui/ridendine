@@ -4,12 +4,18 @@ import { Restaurant } from "@/app/page";
 import RestaurantCard from "./RestaurantCard";
 import { useState, useMemo } from "react";
 
-type SortBy = "distance" | "rating";
+type SortBy = "best" | "distance" | "rating";
+
+const MAX_DISTANCE = 750; // matches Turf.js filter distance
+
+function bestMatchScore(r: Restaurant): number {
+  const ratingScore = ((r.rating ?? 0) / 5) * 0.65;
+  const proximityScore = (1 - r.distanceFromRoute / MAX_DISTANCE) * 0.35;
+  return ratingScore + proximityScore;
+}
 
 const RATING_OPTIONS = [
-  { label: "All", value: 0 },
   { label: "3.5+", value: 3.5 },
-  { label: "4.0+", value: 4.0 },
   { label: "4.5+", value: 4.5 },
 ];
 
@@ -25,7 +31,7 @@ export default function RestaurantSidebar({
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [minRating, setMinRating] = useState(0);
-  const [sortBy, setSortBy] = useState<SortBy>("distance");
+  const [sortBy, setSortBy] = useState<SortBy>("best");
 
   const filteredRestaurants = useMemo(() => {
     return restaurants
@@ -40,7 +46,9 @@ export default function RestaurantSidebar({
       })
       .sort((a, b) => {
         if (sortBy === "rating") return (b.rating ?? 0) - (a.rating ?? 0);
-        return a.distanceFromRoute - b.distanceFromRoute;
+        if (sortBy === "distance")
+          return a.distanceFromRoute - b.distanceFromRoute;
+        return bestMatchScore(b) - bestMatchScore(a); // "best" default
       });
   }, [restaurants, searchQuery, minRating, sortBy]);
 
@@ -100,13 +108,15 @@ export default function RestaurantSidebar({
 
               {/* Rating + Sort on one row */}
               <div className="flex items-center justify-between">
-                {/* Rating chips */}
+                {/* Rating toggles */}
                 <div className="flex gap-1">
                   {RATING_OPTIONS.map((opt) => (
                     <button
                       key={opt.value}
                       type="button"
-                      onClick={() => setMinRating(opt.value)}
+                      onClick={() =>
+                        setMinRating(minRating === opt.value ? 0 : opt.value)
+                      }
                       className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
                         minRating === opt.value
                           ? "bg-primary text-white"
@@ -118,30 +128,22 @@ export default function RestaurantSidebar({
                   ))}
                 </div>
 
-                {/* Sort toggle */}
-                <div className="flex rounded overflow-hidden border border-gray-700">
-                  <button
-                    type="button"
-                    onClick={() => setSortBy("distance")}
-                    className={`px-2.5 py-1 text-xs font-medium transition-colors ${
-                      sortBy === "distance"
-                        ? "bg-primary text-white"
-                        : "bg-app-bg text-text-muted hover:text-text-secondary"
-                    }`}
-                  >
-                    Nearest
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSortBy("rating")}
-                    className={`px-2.5 py-1 text-xs font-medium transition-colors border-l border-gray-700 ${
-                      sortBy === "rating"
-                        ? "bg-primary text-white"
-                        : "bg-app-bg text-text-muted hover:text-text-secondary"
-                    }`}
-                  >
-                    Top rated
-                  </button>
+                {/* Sort toggles */}
+                <div className="flex gap-1">
+                  {(["distance", "rating"] as const).map((opt) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => setSortBy(sortBy === opt ? "best" : opt)}
+                      className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+                        sortBy === opt
+                          ? "bg-primary text-white"
+                          : "bg-app-bg text-text-muted border border-gray-700 hover:border-primary/50 hover:text-text-secondary"
+                      }`}
+                    >
+                      {opt === "distance" ? "Nearest" : "Top rated"}
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>

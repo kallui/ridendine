@@ -48,7 +48,8 @@ function MapContent() {
   }>({});
   const [isSearchingRestaurants, setIsSearchingRestaurants] = useState(false);
   const [showBounds, setShowBounds] = useState(true);
-  const [selectedRestaurant, setSelectedRestaurant] = useState<Restaurant | null>(null);
+  const [selectedRestaurant, setSelectedRestaurant] =
+    useState<Restaurant | null>(null);
 
   // Derived: restaurants/circles for the currently selected route (or empty if none selected)
   const restaurants =

@@ -1,23 +1,29 @@
 # Ride'N'Dine - Project Kanban Board
 
-Last Updated: February 17, 2026 (session 2)
+Last Updated: February 21, 2026 (session 3)
 
 ---
 
 ## 🏗️ In Progress
 
-### Restaurant List Sidebar (Phase 1)
+### Mobile Responsive Layout
 
-- [ ] Add search by name (client-side filtering)
-- [ ] Add distance filter (< 200m, < 500m, < 750m)
-- [ ] Add rating filter (minimum rating selector)
-- [ ] Add sort toggle (Distance | Rating)
-- [ ] Click card → center map + open marker info window
-- [ ] Mobile responsive layout (collapsible by default)
+- [ ] Bottom sheet pattern for sidebar on mobile
+- [ ] Collapsible route panel on mobile
+- [ ] Touch-friendly card interactions
 
 ---
 
 ## ✅ Completed
+
+### UI/UX Polish — Session 3 (Feb 21, 2026)
+
+- [x] RouteOptionCard redesign: transit lines as headline ("🚌 R4 → 🚇 Canada Line"), 2-line compact card
+- [x] Restaurant sidebar filters: search by name, 3.5+ / 4.5+ rating toggle chips, Nearest / Top Rated sort toggle
+- [x] Best Match default sort algorithm: (rating/5 × 0.65) + (1 − distance/750) × 0.35
+- [x] Click restaurant card → panTo + setZoom(17) on map, opens marker popup
+- [x] Green "View on Google Maps" button consistent across card and popup (RestaurantShared)
+- [x] Lifted selectedRestaurant state to page.tsx (sidebar click → map pan)
 
 ### UI/UX Polish — Session 2
 
@@ -93,13 +99,14 @@ Last Updated: February 17, 2026 (session 2)
 
 ## 📋 Backlog
 
-### Phase 2: AI Cuisine Classification
+### Phase 2: AI Cuisine Classification (On Hold — API quota issues)
 
-- [ ] Research Google Maps ToS for AI-enhanced data
-- [ ] Implement AI model for cuisine type inference
-  - Input: Restaurant name, reviews (optional), photos (optional)
-  - Output: Cuisine tags (sushi, japanese, dimsum, chinese, etc.)
-- [ ] Add cuisine filter chips in sidebar
+- [ ] Resolve Gemini API free tier availability (limit: 0 on gemini-2.0-flash)
+- [ ] Consider gemini-1.5-flash or alternative (OpenAI, local model)
+- [ ] Next.js API route already prototyped at `/api/classify-restaurants`
+- [ ] Retry-with-backoff + daily quota detection already built
+- [ ] Cuisine chip filters in sidebar already designed (cuisineMap prop pattern)
+- [ ] Global cross-route cuisine cache pattern (globalCuisineMap) already designed
 - [ ] Session-based caching (no persistent storage of Google data)
 - [ ] Cost analysis for AI API calls
 
