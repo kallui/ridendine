@@ -15,7 +15,7 @@
     "@types/next-pwa": "^5.6.9",
     "@vis.gl/react-google-maps": "^1.7.1",
     "maplibre-gl": "^5.10.0",
-    "next": "16.0.1",
+    "next": "^16.1.6",
     "next-pwa": "^5.6.0",
     "pg": "^8.16.3",
     "rbush": "^4.0.1",
