@@ -3,13 +3,10 @@
 import { ReactNode } from "react";
 
 interface BottomSheetProps {
-  isVisible: boolean; // whether to show the sheet at all
-  isExpanded: boolean; // peek vs full
+  isVisible: boolean;
+  isExpanded: boolean;
   onToggle: () => void;
-  peekLabel: string; // text shown in peek mode e.g. "3 routes found"
-  // How much of the sheet is visible in peek state.
-  // Default "5rem" = handle bar only.
-  // Pass a larger value (e.g. "15rem") to preview one card below the handle.
+  peekLabel: string;
   peekHeight?: string;
   children: ReactNode;
 }
@@ -31,50 +28,48 @@ export default function BottomSheet({
   peekHeight = "5rem",
   children,
 }: BottomSheetProps) {
-  const translateClass = !isVisible
-    ? "translate-y-full"
+  // Use inline style instead of a dynamic Tailwind class — Tailwind's static
+  // scanner can't detect template-literal class names and purges them in prod.
+  const translateY = !isVisible
+    ? "100%"
     : isExpanded
-      ? "translate-y-0"
-      : `translate-y-[calc(100%-${peekHeight})]`;
+      ? "0%"
+      : `calc(100% - ${peekHeight})`;
 
   return (
     <div
-      className={`sm:hidden fixed bottom-0 left-0 right-0 h-[68vh] bg-card-bg border-t border-gray-800 rounded-t-2xl shadow-2xl z-30 flex flex-col transition-transform duration-300 ease-in-out ${translateClass}`}
+      className="lg:hidden fixed bottom-0 left-0 right-0 h-[68vh] bg-card-bg border-t border-gray-800 rounded-t-2xl shadow-2xl z-30 flex flex-col transition-transform duration-300 ease-in-out"
+      style={{ transform: `translateY(${translateY})` }}
     >
-      {/* Handle bar — exactly h-20 so peek height matches translateY calc */}
+      {/* Handle bar — exactly h-20 so peek height matches the calc above */}
       <button
         onClick={onToggle}
-        className="h-20 shrink-0 w-full flex flex-col items-center justify-center px-4 gap-2 border-b border-gray-800"
+        className="h-20 shrink-0 w-full flex flex-col items-center justify-center px-4 gap-1 bg-card-bg border-b border-gray-800 z-10 relative"
         aria-label={isExpanded ? "Collapse" : "Expand"}
       >
-        {/* Visual drag handle indicator */}
-        <div className="w-10 h-1 bg-gray-600 rounded-full" />
-
-        <div className="flex items-center justify-between w-full">
-          <span className="text-text-primary font-semibold text-sm">
-            {peekLabel}
-          </span>
-          {/* Chevron rotates 180° when expanded */}
-          <svg
-            className={`w-4 h-4 text-text-muted transition-transform duration-300 ${
-              isExpanded ? "rotate-180" : ""
-            }`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M5 15l7-7 7 7"
-            />
-          </svg>
-        </div>
+        {/* Chevron at top-center: points up when peek (tap to expand), down when expanded (tap to collapse) */}
+        <svg
+          className={`w-5 h-5 text-text-muted transition-transform duration-300 ${
+            isExpanded ? "rotate-180" : ""
+          }`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M5 15l7-7 7 7"
+          />
+        </svg>
+        <span className="text-text-primary font-semibold text-sm">
+          {peekLabel}
+        </span>
       </button>
 
-      {/* Scrollable content — owns all scrolling for sheet content */}
-      <div className="flex-1 overflow-y-auto min-h-0">{children}</div>
+      {/* Content area — children manage their own scroll */}
+      <div className="flex-1 min-h-0 overflow-hidden">{children}</div>
     </div>
   );
 }

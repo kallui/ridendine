@@ -68,9 +68,9 @@ export default function RestaurantSidebar({
   // No outer container — BottomSheet provides positioning and scroll.
   if (variant === "sheet") {
     return (
-      <div>
-        {/* sticky top-0 inside overflow-y-auto sticks to the scroll container, not the viewport */}
-        <div className="sticky top-0 bg-card-bg px-4 py-3 border-b border-gray-800 space-y-2 z-10">
+      <div className="h-full flex flex-col">
+        {/* Fixed header — never scrolls */}
+        <div className="shrink-0 bg-card-bg px-4 py-3 border-b border-gray-800 space-y-2">
           {/* Back button + route summary — only shown in sheet variant */}
           {onBack && (
             <div className="flex items-center justify-between gap-2">
@@ -131,21 +131,23 @@ export default function RestaurantSidebar({
             </div>
           </div>
         </div>
-        {/* List — no inner scroll, BottomSheet's overflow-y-auto handles it */}
-        <div className="p-4 space-y-3 pb-8">
-          {filteredRestaurants.length === 0 ? (
-            <p className="text-text-muted text-sm text-center pt-8">
-              No restaurants match your filters.
-            </p>
-          ) : (
-            filteredRestaurants.map((restaurant) => (
-              <RestaurantCard
-                key={restaurant.placeId}
-                restaurant={restaurant}
-                onClick={onRestaurantClick}
-              />
-            ))
-          )}
+        {/* Scrollable list */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="p-4 space-y-3 pb-8">
+            {filteredRestaurants.length === 0 ? (
+              <p className="text-text-muted text-sm text-center pt-8">
+                No restaurants match your filters.
+              </p>
+            ) : (
+              filteredRestaurants.map((restaurant) => (
+                <RestaurantCard
+                  key={restaurant.placeId}
+                  restaurant={restaurant}
+                  onClick={onRestaurantClick}
+                />
+              ))
+            )}
+          </div>
         </div>
       </div>
     );
@@ -155,7 +157,7 @@ export default function RestaurantSidebar({
     <>
       {/* Sidebar — hidden on mobile (BottomSheet handles mobile) */}
       <div
-        className={`hidden sm:block absolute top-4 right-0 bottom-10 bg-card-bg shadow-2xl border border-gray-800 rounded-tl-xl rounded-bl-xl transition-all duration-300 ease-in-out z-20 ${
+        className={`hidden lg:block absolute top-4 right-0 bottom-10 bg-card-bg shadow-2xl border border-gray-800 rounded-tl-xl rounded-bl-xl transition-all duration-300 ease-in-out z-20 ${
           isCollapsed ? "w-0" : "w-96"
         }`}
       >

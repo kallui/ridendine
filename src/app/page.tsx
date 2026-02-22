@@ -375,14 +375,14 @@ function MapContent() {
           onMapClick={() => setIsBottomSheetExpanded(false)}
         />
         {/* Left column: search bar always on top, route panel fills remaining space */}
-        <div className="absolute top-4 left-4 right-4 bottom-10 z-10 sm:right-auto sm:w-96 flex flex-col gap-2 pointer-events-none">
+        <div className="absolute top-4 left-4 right-4 bottom-24 z-10 sm:right-auto sm:w-96 lg:bottom-10 flex flex-col gap-2 pointer-events-none">
           <div className="pointer-events-auto">
             <RouteSearch onSearch={handleGetDirection} isLoading={!routeLib} />
           </div>
 
           {/* Route Selection Panel — desktop only (mobile uses BottomSheet) */}
           {routes.length > 0 && (
-            <div className="hidden sm:flex pointer-events-auto flex-1 min-h-0">
+            <div className="hidden lg:flex pointer-events-auto flex-1 min-h-0">
               <RouteSelectionPanel
                 routes={routes}
                 selectedRouteIndex={selectedRouteIndex}

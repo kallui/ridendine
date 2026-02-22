@@ -22,40 +22,42 @@ export default function RouteSelectionPanel({
   // Mobile: flat list, no fixed-height container, BottomSheet handles scroll
   if (mobileMode) {
     return (
-      <div className="p-4 flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <span className="text-text-secondary text-sm font-medium">
-            Choose your route
-          </span>
-          <button
-            onClick={onBack}
-            className="text-text-secondary hover:text-text-primary text-sm flex items-center gap-1 transition-colors"
-          >
-            ← Change
-          </button>
+      <div className="h-full overflow-y-auto">
+        <div className="p-4 flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <span className="text-text-secondary text-sm font-medium">
+              Choose your route
+            </span>
+            <button
+              onClick={onBack}
+              className="text-text-secondary hover:text-text-primary text-sm flex items-center gap-1 transition-colors"
+            >
+              ← Change
+            </button>
+          </div>
+          <div className="space-y-2">
+            {routes.map((route, index) => (
+              <RouteOptionCard
+                key={index}
+                route={route}
+                routeIndex={index}
+                isSelected={selectedRouteIndex === index}
+                onSelect={onRouteSelect}
+              />
+            ))}
+          </div>
+          {selectedRouteIndex === null && (
+            <p className="text-text-secondary text-sm text-center">
+              Select a route to find restaurants
+            </p>
+          )}
         </div>
-        <div className="space-y-2">
-          {routes.map((route, index) => (
-            <RouteOptionCard
-              key={index}
-              route={route}
-              routeIndex={index}
-              isSelected={selectedRouteIndex === index}
-              onSelect={onRouteSelect}
-            />
-          ))}
-        </div>
-        {selectedRouteIndex === null && (
-          <p className="text-text-secondary text-sm text-center">
-            Select a route to find restaurants
-          </p>
-        )}
       </div>
     );
   }
 
   return (
-    <div className="h-full flex flex-col bg-card-bg rounded-lg shadow-lg p-4">
+    <div className="w-full h-full flex flex-col bg-[#2a2a2a] rounded-lg shadow-xl border border-gray-800 p-4 sm:p-6">
       <div className="flex items-center justify-between mb-3 shrink-0">
         <h3 className="text-text-primary font-semibold text-lg">
           Choose Your Route

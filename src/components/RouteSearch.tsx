@@ -8,6 +8,21 @@ interface RouteSearchProps {
   isLoading?: boolean;
 }
 
+// Format a place for display the way Google Maps does:
+// - Named places (restaurants, transit stops, etc.): "Name, City, Province"
+// - Plain addresses: just the address, no duplication
+// We detect duplication by checking if formatted_address already starts with the name.
+function formatPlaceLabel(place: google.maps.places.PlaceResult): string {
+  const name = place.name ?? "";
+  const address = place.formatted_address ?? "";
+  if (!name || address.toLowerCase().startsWith(name.toLowerCase())) {
+    return address;
+  }
+  // Strip the name from the front of the address if it's there further in,
+  // to avoid "Pho Tan, Pho Tan Restaurant, 3281..." edge cases
+  return `${name}, ${address}`;
+}
+
 export default function RouteSearch({ onSearch, isLoading }: RouteSearchProps) {
   const [origin, setOrigin] = useState("");
   const [destination, setDestination] = useState("");
@@ -22,11 +37,7 @@ export default function RouteSearch({ onSearch, isLoading }: RouteSearchProps) {
     const place = originAutoComplete.selectedPlace;
     if (place?.formatted_address) {
       setOrigin(place.formatted_address);
-      setOriginLabel(
-        place.name
-          ? `${place.name}, ${place.formatted_address}`
-          : place.formatted_address,
-      );
+      setOriginLabel(formatPlaceLabel(place));
     }
   }, [originAutoComplete.selectedPlace]);
 
@@ -34,11 +45,7 @@ export default function RouteSearch({ onSearch, isLoading }: RouteSearchProps) {
     const place = destinationAutoComplete.selectedPlace;
     if (place?.formatted_address) {
       setDestination(place.formatted_address);
-      setDestinationLabel(
-        place.name
-          ? `${place.name}, ${place.formatted_address}`
-          : place.formatted_address,
-      );
+      setDestinationLabel(formatPlaceLabel(place));
     }
   }, [destinationAutoComplete.selectedPlace]);
 
@@ -77,6 +84,11 @@ export default function RouteSearch({ onSearch, isLoading }: RouteSearchProps) {
       className="bg-[#2a2a2a] p-3 sm:p-6 rounded-lg shadow-xl flex flex-col gap-2 sm:gap-4 border border-gray-800"
       onSubmit={handleSubmit}
     >
+      {/* Desktop-only logo header above the inputs */}
+      <p className="hidden lg:block text-primary font-bold text-lg -mb-1">
+        Ride&apos;N&apos;Dine
+      </p>
+
       {/* Origin + Destination with route line indicator */}
       <div className="flex gap-3">
         {/* Left: journey indicator */}
@@ -157,7 +169,7 @@ export default function RouteSearch({ onSearch, isLoading }: RouteSearchProps) {
               ref={destinationAutoComplete.inputRef}
               type="text"
               id="destination"
-              className="w-full px-4 py-2 sm:pr-4 pr-10 border border-gray-700 rounded-md
+              className="w-full px-4 py-2 pr-10 border border-gray-700 rounded-md
                    bg-[#1a1a1a] text-gray-100 placeholder:text-gray-500
                    focus:outline-none focus:ring-2 focus:ring-emerald-500"
               placeholder="Destination"
@@ -170,7 +182,7 @@ export default function RouteSearch({ onSearch, isLoading }: RouteSearchProps) {
             <button
               type="submit"
               disabled={isLoading}
-              className="sm:hidden absolute right-2 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-primary disabled:text-gray-600 transition-colors"
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-primary disabled:text-gray-600 transition-colors"
               aria-label="Search"
             >
               <svg
@@ -190,24 +202,6 @@ export default function RouteSearch({ onSearch, isLoading }: RouteSearchProps) {
           </div>
         </div>
       </div>
-
-      <button
-        className="hidden sm:block w-full bg-primary text-white py-2 sm:py-3 px-4 rounded-md hover:bg-primary-hover transition-colors font-medium shadow-sm disabled:bg-gray-400 disabled:cursor-not-allowed"
-        type="submit"
-        disabled={isLoading}
-      >
-        {isLoading ? "Loading..." : "Search"}
-      </button>
-
-      {/* Preset Test Button — dev tool, hidden on mobile */}
-      <button
-        type="button"
-        onClick={handlePresetSearch}
-        disabled={isLoading}
-        className="hidden sm:block w-full bg-app-bg text-gray-300 py-2 px-4 rounded-md hover:bg-black transition-colors text-sm font-medium border border-gray-800 disabled:bg-app-bg disabled:cursor-not-allowed"
-      >
-        🧪 Test: Crowley Dr → WorkSafeBC Richmond
-      </button>
     </form>
   );
 }
