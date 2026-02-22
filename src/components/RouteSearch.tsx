@@ -70,25 +70,11 @@ export default function RouteSearch({ onSearch, isLoading }: RouteSearchProps) {
     onSearch(origin, destination);
   };
 
-  const handlePresetSearch = () => {
-    const presetOrigin = "3433 Crowley Dr, Vancouver, BC V5R 6C5, Canada";
-    const presetDestination =
-      "6951 Westminster Hwy, Richmond, BC V7C 1C6, Canada";
-    setOrigin(presetOrigin);
-    setDestination(presetDestination);
-    onSearch(presetOrigin, presetDestination);
-  };
-
   return (
     <form
       className="bg-[#2a2a2a] p-3 sm:p-6 rounded-lg shadow-xl flex flex-col gap-2 sm:gap-4 border border-gray-800"
       onSubmit={handleSubmit}
     >
-      {/* Desktop-only logo header above the inputs */}
-      <p className="hidden lg:block text-primary font-bold text-lg -mb-1">
-        Ride&apos;N&apos;Dine
-      </p>
-
       {/* Origin + Destination with route line indicator */}
       <div className="flex gap-3">
         {/* Left: journey indicator */}
