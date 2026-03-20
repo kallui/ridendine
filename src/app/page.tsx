@@ -8,7 +8,7 @@ import RouteSelectionPanel from "@/components/RouteSelectionPanel";
 import BottomSheet from "@/components/BottomSheet";
 import { getRouteHeadline } from "@/components/RouteOptionCard";
 import { APIProvider, useMapsLibrary } from "@vis.gl/react-google-maps";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useCustomPlacesAutocomplete } from "@/hooks/useCustomPlacesAutocomplete";
 import { ThemedAutocompleteInput } from "@/components/ThemedAutocompleteInput";
@@ -54,10 +54,16 @@ function MapContent() {
   const [userLocation, setUserLocation] =
     useState<google.maps.LatLngLiteral | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [routeLimitError, setRouteLimitError] = useState<string | null>(null);
   // === SEARCH CONFIGURATION ===
   const turfFilterDistance = 750; // Turf.js filter: keep restaurants within this distance from route (meters)
   const apiSearchRadius = 1300; // API search radius: cast wider net, then filter with Turf.js (meters)
   const searchInterval = 2.5; // Sample points along route every X km for API searches
+  const maxCommuteMinutes = 90; // Guardrail: avoid very long trips that can trigger many downstream API calls
+  const maxRouteDistanceKm = 45;
+  const maxPlacesConcurrency = 3;
+  const maxPlacesRetries = 1;
+  const placesRetryDelayMs = 350;
 
   // === MAP/ROUTE STATE ===
   const [routes, setRoutes] = useState<google.maps.DirectionsRoute[]>([]); // All route alternatives
@@ -77,6 +83,7 @@ function MapContent() {
   const showBounds = true;
   const [selectedRestaurant, setSelectedRestaurant] =
     useState<Restaurant | null>(null);
+  const activeRestaurantSearchIdRef = useRef(0);
 
   // === MOBILE BOTTOM SHEET ===
   const [isBottomSheetExpanded, setIsBottomSheetExpanded] = useState(false);
@@ -181,6 +188,10 @@ function MapContent() {
       return;
     }
 
+    // Invalidate any in-flight Places fan-out from older searches.
+    activeRestaurantSearchIdRef.current += 1;
+    setIsSearchingRestaurants(false);
+
     const normalizeWaypoint = (
       waypoint: string | google.maps.LatLngLiteral | google.maps.Place,
     ): string | google.maps.LatLngLiteral | google.maps.Place | null => {
@@ -216,6 +227,15 @@ function MapContent() {
 
     const directionsService = new routeLib.DirectionsService();
 
+    const isRouteWithinLimit = (route: google.maps.DirectionsRoute) => {
+      const leg = route.legs[0];
+      const durationMinutes = (leg.duration?.value ?? Infinity) / 60;
+      const distanceKm = (leg.distance?.value ?? Infinity) / 1000;
+      return (
+        durationMinutes <= maxCommuteMinutes && distanceKm <= maxRouteDistanceKm
+      );
+    };
+
     directionsService.route(
       {
         origin: normalizedOrigin,
@@ -236,10 +256,28 @@ function MapContent() {
             return true;
           });
 
-          const bestRouteIndex = uniqueRoutes.reduce(
+          const limitedRoutes = uniqueRoutes.filter(isRouteWithinLimit);
+
+          if (limitedRoutes.length === 0) {
+            setDirectionsResult(null);
+            setRoutes([]);
+            setSelectedRouteIndex(null);
+            setSelectedRestaurant(null);
+            setRestaurantCache({});
+            setSearchCircleCache({});
+            setViewState("results");
+            setRouteLimitError(
+              `Trips longer than ${maxCommuteMinutes} minutes or ${maxRouteDistanceKm} km are blocked to control API usage. Try a closer destination.`,
+            );
+            return;
+          }
+
+          setRouteLimitError(null);
+
+          const bestRouteIndex = limitedRoutes.reduce(
             (bestIndex, route, index) => {
               const bestDuration =
-                uniqueRoutes[bestIndex].legs[0].duration?.value ?? Infinity;
+                limitedRoutes[bestIndex].legs[0].duration?.value ?? Infinity;
               const currentDuration = route.legs[0].duration?.value ?? Infinity;
               return currentDuration < bestDuration ? index : bestIndex;
             },
@@ -247,16 +285,16 @@ function MapContent() {
           );
 
           setDirectionsResult(result);
-          setRoutes(uniqueRoutes);
+          setRoutes(limitedRoutes);
           setSelectedRestaurant(null);
           setRestaurantCache({});
           setSearchCircleCache({});
 
           // Streamlined flow: preselect best route and load restaurants right away.
-          if (uniqueRoutes.length > 0) {
+          if (limitedRoutes.length > 0) {
             setSelectedRouteIndex(bestRouteIndex);
             extractPolylineFromRoute(
-              uniqueRoutes[bestRouteIndex],
+              limitedRoutes[bestRouteIndex],
               bestRouteIndex,
             );
           } else {
@@ -296,10 +334,12 @@ function MapContent() {
     setSelectedRouteIndex(routeIndex);
     // Cache hit: already searched this route, reuse results — no API call
     if (restaurantCache[routeIndex] !== undefined) {
+      setRouteLimitError(null);
       return;
     }
     // Cache miss: first time selecting this route, search now
     const selectedRoute = routes[routeIndex];
+    setRouteLimitError(null);
     extractPolylineFromRoute(selectedRoute, routeIndex);
   };
 
@@ -313,6 +353,7 @@ function MapContent() {
       return;
     }
 
+    const searchId = ++activeRestaurantSearchIdRef.current;
     setIsSearchingRestaurants(true);
 
     // Create Turf.js line from route
@@ -371,39 +412,97 @@ function MapContent() {
     // Perform multiple searches and collect all results
     const allPlaces: { [key: string]: google.maps.places.PlaceResult } = {};
     const service = new placesLib.PlacesService(document.createElement("div"));
-    let completedSearches = 0;
+    const fetchNearbySearch = (
+      point: google.maps.LatLngLiteral,
+      attempt = 0,
+    ): Promise<google.maps.places.PlaceResult[]> => {
+      return new Promise((resolve) => {
+        service.nearbySearch(
+          {
+            location: point,
+            radius: apiSearchRadius,
+            type: "restaurant",
+          },
+          (results, status) => {
+            if (searchId !== activeRestaurantSearchIdRef.current) {
+              resolve([]);
+              return;
+            }
 
-    searchPoints.forEach((point) => {
-      service.nearbySearch(
-        {
-          location: point,
-          radius: apiSearchRadius, // Use wider API search radius
-          type: "restaurant",
-        },
-        (results, status) => {
-          completedSearches++;
+            if (status === placesLib.PlacesServiceStatus.OK && results) {
+              resolve(results);
+              return;
+            }
 
-          if (status === placesLib.PlacesServiceStatus.OK && results) {
-            // Add results to object (deduplicates by place_id)
-            results.forEach((place) => {
-              if (place.place_id) {
-                allPlaces[place.place_id] = place;
-              }
-            });
+            if (status === placesLib.PlacesServiceStatus.ZERO_RESULTS) {
+              resolve([]);
+              return;
+            }
+
+            const isTransientStatus =
+              status === placesLib.PlacesServiceStatus.OVER_QUERY_LIMIT ||
+              status === placesLib.PlacesServiceStatus.UNKNOWN_ERROR;
+
+            if (isTransientStatus && attempt < maxPlacesRetries) {
+              const delayMs = placesRetryDelayMs * (attempt + 1);
+              window.setTimeout(() => {
+                fetchNearbySearch(point, attempt + 1).then(resolve);
+              }, delayMs);
+              return;
+            }
+
+            resolve([]);
+          },
+        );
+      });
+    };
+
+    const runSearchesWithConcurrency = async () => {
+      const workerCount = Math.min(maxPlacesConcurrency, searchPoints.length);
+      let nextIndex = 0;
+
+      const worker = async () => {
+        while (nextIndex < searchPoints.length) {
+          const currentIndex = nextIndex;
+          nextIndex += 1;
+
+          const point = searchPoints[currentIndex];
+          const results = await fetchNearbySearch(point);
+
+          if (searchId !== activeRestaurantSearchIdRef.current) {
+            return;
           }
 
-          // Wait for all searches to complete
-          if (completedSearches === searchPoints.length) {
-            processAllResults(
-              Object.values(allPlaces),
-              polylineCoordinates,
-              filterDistance,
-              routeIndex,
-            );
-          }
-        },
-      );
-    });
+          results.forEach((place) => {
+            if (place.place_id) {
+              allPlaces[place.place_id] = place;
+            }
+          });
+        }
+      };
+
+      await Promise.all(Array.from({ length: workerCount }, () => worker()));
+    };
+
+    runSearchesWithConcurrency()
+      .then(() => {
+        if (searchId !== activeRestaurantSearchIdRef.current) {
+          return;
+        }
+        processAllResults(
+          Object.values(allPlaces),
+          polylineCoordinates,
+          filterDistance,
+          routeIndex,
+          searchId,
+        );
+      })
+      .catch(() => {
+        if (searchId !== activeRestaurantSearchIdRef.current) {
+          return;
+        }
+        setIsSearchingRestaurants(false);
+      });
   };
 
   const processAllResults = (
@@ -411,7 +510,12 @@ function MapContent() {
     polylineCoordinates: google.maps.LatLngLiteral[],
     filterDistance: number,
     routeIndex: number,
+    searchId: number,
   ) => {
+    if (searchId !== activeRestaurantSearchIdRef.current) {
+      return;
+    }
+
     // Validate coordinates
     const validCoordinates = polylineCoordinates.filter(
       (c) =>
@@ -504,6 +608,9 @@ function MapContent() {
       .filter((restaurant): restaurant is Restaurant => restaurant !== null);
 
     // Store in cache so switching back to this route is free
+    if (searchId !== activeRestaurantSearchIdRef.current) {
+      return;
+    }
     setRestaurantCache((prev) => ({ ...prev, [routeIndex]: restaurants }));
     setIsSearchingRestaurants(false);
   };
@@ -615,6 +722,11 @@ function MapContent() {
                 defaultDestination={destinationLabel}
               />
             </motion.div>
+            {routeLimitError && (
+              <p className="text-amber-300 text-xs sm:text-sm px-1">
+                {routeLimitError}
+              </p>
+            )}
             {routes.length > 0 && (
               <div className="hidden lg:block flex-1 min-h-0">
                 <RouteSelectionPanel

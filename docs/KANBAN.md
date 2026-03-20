@@ -40,6 +40,9 @@ Last Updated: March 19, 2026 (session 5)
 - [x] Fixed Directions `NOT_FOUND` edge case by normalizing "Current Location"/"Your location" labels to GPS coordinates before route requests
 - [x] Removed redundant `← Change` controls from RouteSelectionPanel (desktop and mobile); search field editing is now the primary route-change path
 - [x] Optimized route sampling to reduce API cost: avoid beyond-endpoint sampling and skip near-duplicate search centers to prevent heavily overlapping circles
+- [x] Added anti-abuse route guardrails: block searches beyond max commute duration/distance (90 min / 45 km) to control API cost
+- [x] Hardened Places fan-out algorithm: added active-search token guard to ignore stale in-flight callbacks from older searches
+- [x] Smoothed Places API QPS and resilience: bounded concurrent nearby searches plus one retry for transient statuses (`OVER_QUERY_LIMIT` / `UNKNOWN_ERROR`)
 
 ### Mobile/Tablet Polish — Session 4 (Feb 21, 2026)
 
