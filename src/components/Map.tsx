@@ -13,6 +13,8 @@ import RestaurantMarkerPopup from "./RestaurantMarkerPopup";
 interface MapProps {
   centerCoordinate: { lat: number; lng: number };
   zoomLevel: number;
+  mapId?: string;
+  colorScheme?: "DARK" | "LIGHT";
   directionsResult?: google.maps.DirectionsResult | null;
   routes: google.maps.DirectionsRoute[];
   selectedRouteIndex: number | null;
@@ -27,6 +29,8 @@ interface MapProps {
 export default function Map({
   centerCoordinate,
   zoomLevel,
+  mapId,
+  colorScheme,
   directionsResult,
   routes,
   selectedRouteIndex,
@@ -70,7 +74,7 @@ export default function Map({
         suppressMarkers: isSelected, // Hide markers for non-selected routes
         suppressInfoWindows: true,
         polylineOptions: {
-          strokeColor: isSelected ? "#10B981" : "#6B7280", // Primary green vs gray
+          strokeColor: isSelected ? "#6366F1" : "#6B7280", // Primary indigo vs gray
           strokeWeight: isSelected ? 5 : 3,
           strokeOpacity: isSelected ? 0.8 : 0.4,
         },
@@ -104,10 +108,10 @@ export default function Map({
           new google.maps.Circle({
             center: searchCircle.center,
             radius: searchCircle.radius,
-            strokeColor: "#10B981", // Green for search circles
+            strokeColor: "#818CF8", // Indigo for search circles
             strokeOpacity: 0.6,
             strokeWeight: 2,
-            fillColor: "#10B981",
+            fillColor: "#6366F1",
             fillOpacity: 0.1,
             map: map,
           }),
@@ -128,8 +132,8 @@ export default function Map({
       defaultZoom={zoomLevel}
       gestureHandling="greedy"
       disableDefaultUI
-      mapId={process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID}
-      colorScheme="DARK"
+      mapId={mapId}
+      colorScheme={colorScheme}
       onClick={onMapClick}
     >
       {/* Restaurant Markers */}

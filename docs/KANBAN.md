@@ -1,6 +1,6 @@
 # Ride'N'Dine - Project Kanban Board
 
-Last Updated: February 21, 2026 (session 4)
+Last Updated: March 19, 2026 (session 5)
 
 ---
 
@@ -9,6 +9,37 @@ Last Updated: February 21, 2026 (session 4)
 ---
 
 ## ✅ Completed
+
+### Hero Search Hotfix — Session 5 (Mar 19, 2026)
+
+- [x] Fixed race condition where hero destination selection could do nothing if GPS or Routes library initialized after the click
+- [x] Added fallback behavior: if location is unavailable, destination click now transitions to results so user can manually enter origin
+- [x] Restored mobile results workflow with BottomSheet phases (route selection then restaurants), while keeping desktop left-panel + right-sidebar layout
+- [x] Added keyboard navigation for autocomplete dropdowns (arrow keys, enter to select, escape to close) in both hero and route search forms
+- [x] Cleaned hook state handling for `useCustomPlacesAutocomplete` to avoid effect state-update lint warnings while preserving loading and prediction behavior
+- [x] Standardized indigo accent tokens in `globals.css` and migrated hero autocomplete from hardcoded `indigo-*` classes to tokenized theme classes
+- [x] Migrated app theme palette from emerald-led to indigo-led (updated primary, hover, borders, and surfaces to cool neutral + indigo tones)
+- [x] Replaced remaining emerald-specific UI states (focus rings, selected dropdown row states, route overlays/search circles) with indigo token or indigo hex equivalents
+- [x] Shifted indigo palette lighter/less purple and added system-aware dark/light theme tokens with explicit `data-theme` overrides
+- [x] Added navbar theme toggle with persisted preference (`localStorage`) and map color scheme synchronization (`DARK`/`LIGHT`)
+- [x] Replaced remaining hardcoded dark panel/input classes in key components with token-based classes so light mode renders correctly
+- [x] Fixed navbar layering: made navbar fixed with high z-index so it remains visible above map and hero/results overlays
+- [x] Switched theme toggle control to icon-based sun/moon button for cleaner navbar UI
+- [x] Added support for theme-specific map styles via env vars (`NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID_DARK` / `NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID_LIGHT`) with fallback to default map ID
+- [x] Softened light-mode surfaces by replacing pure white card backgrounds with a subtle indigo tint for reduced glare and better visual consistency
+- [x] Increased light-mode indigo tint one step further (`--app-bg` and `--card-bg`) to reduce bright-white feel while preserving readability
+- [x] Reduced navbar height slightly and moved results left panel lower on desktop to prevent overlap with the Current Location input
+- [x] Refined RouteSearch to a cleaner minimalist layout (simplified connector, compact control spacing, subtle From/To labels, GPS state chip for Current Location)
+- [x] Modernized route option cards with lighter visual weight, clear Selected/Best badges, and improved scan hierarchy
+- [x] Streamlined flow by auto-selecting the fastest deduplicated route and preloading nearby restaurants immediately after search
+- [x] Further decluttered RouteSearch for mobile-first minimalism by removing From/To labels, GPS chip, and swap control row to reduce vertical density
+- [x] Reintroduced swap action as a compact floating right-rail button (Google Maps-inspired) to keep functionality without adding vertical bulk
+- [x] Rotated floating swap icon 90° for correct visual orientation
+- [x] Fixed swap edge case where both autocomplete dropdowns could open at once by gating suggestions to the focused field
+- [x] Updated swap behavior to immediately trigger a fresh route search for swapped origin/destination while preventing duplicate auto-search calls
+- [x] Fixed Directions `NOT_FOUND` edge case by normalizing "Current Location"/"Your location" labels to GPS coordinates before route requests
+- [x] Removed redundant `← Change` controls from RouteSelectionPanel (desktop and mobile); search field editing is now the primary route-change path
+- [x] Optimized route sampling to reduce API cost: avoid beyond-endpoint sampling and skip near-duplicate search centers to prevent heavily overlapping circles
 
 ### Mobile/Tablet Polish — Session 4 (Feb 21, 2026)
 
@@ -130,7 +161,7 @@ Last Updated: February 21, 2026 (session 4)
 ### Technical Debt
 
 - [ ] **Migrate `google.maps.places.Autocomplete` → `PlaceAutocompleteElement`** — Current API deprecated as of March 2025 (not discontinued yet, 12 months notice required). New API is a web component that renders its own `<input>`, requires CSS custom properties for dark-theme styling instead of Tailwind. Defer until ready for a dedicated refactor.
-- [ ] Remove debug `console.log` statements before final release (route dedup logs in page.tsx)
+- [x] Remove debug `console.log` statements before final release (route dedup logs in page.tsx)
 
 ### Phase 2: AI Cuisine Classification (On Hold — API quota issues)
 
