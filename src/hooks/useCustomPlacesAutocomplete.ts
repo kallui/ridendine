@@ -16,6 +16,7 @@ export type AutocompletePrediction = {
 
 export function useCustomPlacesAutocomplete(options?: {
   initialInput?: string;
+  userLocation?: google.maps.LatLngLiteral | null;
 }) {
   const [initialInput] = useState(options?.initialInput ?? "");
   const [input, setInput] = useState(options?.initialInput ?? "");
@@ -29,23 +30,15 @@ export function useCustomPlacesAutocomplete(options?: {
     !!input && !!placesLib && !(initialInput && input === initialInput);
   const sessionTokenRef =
     useRef<google.maps.places.AutocompleteSessionToken | null>(null);
-  const locationBiasRef =
-    useRef<google.maps.LatLngBoundsLiteral>(VANCOUVER_BIAS);
 
-  // Get user location once for biasing results; falls back to Vancouver
-  useEffect(() => {
-    if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition((pos) => {
-      const { latitude: lat, longitude: lng } = pos.coords;
-      const delta = 0.1; // ~10 km
-      locationBiasRef.current = {
-        north: lat + delta,
-        south: lat - delta,
-        east: lng + delta,
-        west: lng - delta,
-      };
-    });
-  }, []);
+  // Build location bias from passed-in userLocation, falling back to Vancouver
+  const locationBias: google.maps.LatLngBoundsLiteral = options?.userLocation
+    ? (() => {
+        const { lat, lng } = options.userLocation;
+        const delta = 0.1;
+        return { north: lat + delta, south: lat - delta, east: lng + delta, west: lng - delta };
+      })()
+    : VANCOUVER_BIAS;
 
   // Create a session token once the places library is ready
   useEffect(() => {
@@ -64,7 +57,7 @@ export function useCustomPlacesAutocomplete(options?: {
     google.maps.places.AutocompleteSuggestion.fetchAutocompleteSuggestions({
       input,
       sessionToken: sessionTokenRef.current ?? undefined,
-      locationBias: locationBiasRef.current,
+      locationBias: locationBias,
     })
       .then(({ suggestions }) => {
         if (cancelled) return;

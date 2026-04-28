@@ -39,7 +39,11 @@ function MapContent() {
   const [viewState, setViewState] = useState<"hero" | "results">("hero");
   const [originLabel, setOriginLabel] = useState("");
   const [destinationLabel, setDestinationLabel] = useState("");
-  // Destination autocomplete
+  // User's current location (declared first so it can be passed to the hook)
+  const [userLocation, setUserLocation] =
+    useState<google.maps.LatLngLiteral | null>(null);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  // Destination autocomplete (hero view)
   const {
     input,
     setInput,
@@ -49,11 +53,7 @@ function MapContent() {
     setActiveIndex,
     selectedPrediction,
     setSelectedPrediction,
-  } = useCustomPlacesAutocomplete();
-  // User's current location
-  const [userLocation, setUserLocation] =
-    useState<google.maps.LatLngLiteral | null>(null);
-  const [locationError, setLocationError] = useState<string | null>(null);
+  } = useCustomPlacesAutocomplete({ userLocation });
   const [routeLimitError, setRouteLimitError] = useState<string | null>(null);
   // === SEARCH CONFIGURATION ===
   const turfFilterDistance = 750; // Turf.js filter: keep restaurants within this distance from route (meters)
@@ -64,6 +64,7 @@ function MapContent() {
   const maxPlacesConcurrency = 3;
   const maxPlacesRetries = 1;
   const placesRetryDelayMs = 350;
+  const minRestaurantLoadingMs = 450;
 
   // === MAP/ROUTE STATE ===
   const [routes, setRoutes] = useState<google.maps.DirectionsRoute[]>([]); // All route alternatives
@@ -83,10 +84,12 @@ function MapContent() {
   const showBounds = true;
   const [selectedRestaurant, setSelectedRestaurant] =
     useState<Restaurant | null>(null);
+  const activeDirectionsRequestIdRef = useRef(0);
   const activeRestaurantSearchIdRef = useRef(0);
 
   // === MOBILE BOTTOM SHEET ===
   const [isBottomSheetExpanded, setIsBottomSheetExpanded] = useState(false);
+  const [isSearchExpanded, setIsSearchExpanded] = useState(false);
 
   // Theme: system-aware default + persistent manual toggle
   useEffect(() => {
@@ -144,6 +147,9 @@ function MapContent() {
     if (routes.length > 0 && viewState === "hero") {
       setViewState("results");
     }
+    if (routes.length > 0) {
+      setIsSearchExpanded(false); // collapse form when new results arrive
+    }
   }, [routes.length, viewState]);
 
   // Mobile: open sheet when routes arrive, then peek after a route is chosen.
@@ -187,6 +193,8 @@ function MapContent() {
       console.error("Routes library not loaded yet");
       return;
     }
+
+    const directionsRequestId = ++activeDirectionsRequestIdRef.current;
 
     // Invalidate any in-flight Places fan-out from older searches.
     activeRestaurantSearchIdRef.current += 1;
@@ -244,6 +252,10 @@ function MapContent() {
         provideRouteAlternatives: true, // Request 2-3 alternative routes
       },
       (result, status) => {
+        if (directionsRequestId !== activeDirectionsRequestIdRef.current) {
+          return;
+        }
+
         if (status === routeLib.DirectionsStatus.OK && result) {
           // Deduplicate routes by headline + duration — Google returns the same
           // route at different departure times, which are identical for our purposes
@@ -274,32 +286,15 @@ function MapContent() {
 
           setRouteLimitError(null);
 
-          const bestRouteIndex = limitedRoutes.reduce(
-            (bestIndex, route, index) => {
-              const bestDuration =
-                limitedRoutes[bestIndex].legs[0].duration?.value ?? Infinity;
-              const currentDuration = route.legs[0].duration?.value ?? Infinity;
-              return currentDuration < bestDuration ? index : bestIndex;
-            },
-            0,
-          );
-
           setDirectionsResult(result);
           setRoutes(limitedRoutes);
+          setSelectedRouteIndex(null);
           setSelectedRestaurant(null);
           setRestaurantCache({});
           setSearchCircleCache({});
 
-          // Streamlined flow: preselect best route and load restaurants right away.
-          if (limitedRoutes.length > 0) {
-            setSelectedRouteIndex(bestRouteIndex);
-            extractPolylineFromRoute(
-              limitedRoutes[bestRouteIndex],
-              bestRouteIndex,
-            );
-          } else {
-            setSelectedRouteIndex(null);
-          }
+          // Route results are shown, but restaurants are fetched only after
+          // an explicit route selection by the user.
         } else {
           console.error("Error fetching directions:", status);
         }
@@ -354,7 +349,24 @@ function MapContent() {
     }
 
     const searchId = ++activeRestaurantSearchIdRef.current;
+    const searchStartedAt = Date.now();
     setIsSearchingRestaurants(true);
+
+    const finishRestaurantSearch = (id: number) => {
+      if (id !== activeRestaurantSearchIdRef.current) {
+        return;
+      }
+
+      const elapsedMs = Date.now() - searchStartedAt;
+      const remainingMs = Math.max(0, minRestaurantLoadingMs - elapsedMs);
+
+      window.setTimeout(() => {
+        if (id !== activeRestaurantSearchIdRef.current) {
+          return;
+        }
+        setIsSearchingRestaurants(false);
+      }, remainingMs);
+    };
 
     // Create Turf.js line from route
     const turfCoords = polylineCoordinates.map((c) => [c.lng, c.lat]);
@@ -495,13 +507,14 @@ function MapContent() {
           filterDistance,
           routeIndex,
           searchId,
+          finishRestaurantSearch,
         );
       })
       .catch(() => {
         if (searchId !== activeRestaurantSearchIdRef.current) {
           return;
         }
-        setIsSearchingRestaurants(false);
+        finishRestaurantSearch(searchId);
       });
   };
 
@@ -511,6 +524,7 @@ function MapContent() {
     filterDistance: number,
     routeIndex: number,
     searchId: number,
+    finishRestaurantSearch: (searchId: number) => void,
   ) => {
     if (searchId !== activeRestaurantSearchIdRef.current) {
       return;
@@ -527,7 +541,7 @@ function MapContent() {
 
     if (validCoordinates.length < 2) {
       console.error("Not enough valid coordinates");
-      setIsSearchingRestaurants(false);
+      finishRestaurantSearch(searchId);
       return;
     }
 
@@ -612,7 +626,7 @@ function MapContent() {
       return;
     }
     setRestaurantCache((prev) => ({ ...prev, [routeIndex]: restaurants }));
-    setIsSearchingRestaurants(false);
+    finishRestaurantSearch(searchId);
   };
 
   // When user selects a destination in hero:
@@ -655,7 +669,7 @@ function MapContent() {
           showBounds={showBounds}
           selectedRestaurant={selectedRestaurant}
           onSelectRestaurant={setSelectedRestaurant}
-          onMapClick={() => setIsBottomSheetExpanded(false)}
+          onMapClick={() => { setIsBottomSheetExpanded(false); setSelectedRestaurant(null); }}
         />
       </div>
 
@@ -672,10 +686,10 @@ function MapContent() {
           >
             <motion.div
               layoutId="search-bar"
-              className="bg-card-bg/85 backdrop-blur-xl border border-border shadow-2xl rounded-2xl px-8 py-12 flex flex-col items-center gap-8 w-[86vw] max-w-xl mx-auto"
+              className="bg-card-bg/85 backdrop-blur-xl border border-border shadow-2xl rounded-2xl px-8 py-8 md:py-12 flex flex-col items-center gap-4 md:gap-8 w-[86vw] max-w-xl mx-auto"
             >
-              <h1 className="text-4xl md:text-5xl font-bold text-text-primary mb-6 text-center tracking-tight">
-                Where are you headed?
+              <h1 className="text-2xl md:text-5xl font-bold text-text-primary text-center tracking-tight">
+                Hungry on your commute?
               </h1>
               <div className="w-full flex flex-col gap-4">
                 <ThemedAutocompleteInput
@@ -708,19 +722,45 @@ function MapContent() {
         {viewState === "results" && (
           <motion.div
             key="results-left-panel"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.3 }}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
             className="absolute top-20 left-4 right-4 z-20 lg:top-20 lg:left-8 lg:right-auto lg:w-md lg:max-w-[90vw] flex flex-col gap-3 lg:max-h-[calc(100vh-6rem)]"
           >
-            <motion.div layoutId="search-bar">
-              <RouteSearch
-                onSearch={handleGetDirection}
-                isLoading={!routeLib}
-                defaultOrigin={originLabel}
-                defaultDestination={destinationLabel}
-              />
+          <motion.div layoutId="search-bar">
+              {isSearchExpanded || !originLabel || !destinationLabel ? (
+                <RouteSearch
+                  onSearch={(o, d, oLabel, dLabel) => {
+                    setOriginLabel(oLabel);
+                    setDestinationLabel(dLabel);
+                    handleGetDirection(o, d);
+                    setIsSearchExpanded(false);
+                  }}
+                  isLoading={!routeLib}
+                  defaultOrigin={originLabel}
+                  defaultDestination={destinationLabel}
+                  userLocation={userLocation}
+                />
+              ) : (
+                <button
+                  onClick={() => setIsSearchExpanded(true)}
+                  className="w-full flex items-center gap-2 bg-card-bg border border-border rounded-lg px-3 py-2.5 shadow-lg hover:border-primary/50 transition-colors text-left"
+                  aria-label="Edit search"
+                >
+                  <svg className="w-4 h-4 text-text-muted shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  <span className="text-text-primary text-sm flex-1 flex items-center gap-0 min-w-0">
+                    <span className="text-text-muted truncate min-w-0 max-w-[40%]">{originLabel || "Origin"}</span>
+                    <span className="text-text-muted mx-1.5 shrink-0">→</span>
+                    <span className="truncate min-w-0 max-w-[40%]">{destinationLabel || "Destination"}</span>
+                  </span>
+                  <svg className="w-3.5 h-3.5 text-text-muted shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2.414a2 2 0 01.586-1.414z" />
+                  </svg>
+                </button>
+              )}
             </motion.div>
             {routeLimitError && (
               <p className="text-amber-300 text-xs sm:text-sm px-1">

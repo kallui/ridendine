@@ -8,10 +8,13 @@ interface RouteSearchProps {
   onSearch: (
     origin: string | google.maps.Place,
     destination: string | google.maps.Place,
+    originLabel: string,
+    destLabel: string,
   ) => void;
   isLoading?: boolean;
   defaultOrigin?: string;
   defaultDestination?: string;
+  userLocation?: google.maps.LatLngLiteral | null;
 }
 
 export default function RouteSearch({
@@ -19,31 +22,48 @@ export default function RouteSearch({
   isLoading,
   defaultOrigin,
   defaultDestination,
+  userLocation,
 }: RouteSearchProps) {
   const skipNextAutoSearchRef = useRef(false);
+  const originInputRef = useRef<HTMLInputElement>(null);
+  const destInputRef = useRef<HTMLInputElement>(null);
 
   const [focusedField, setFocusedField] = useState<
     "origin" | "destination" | null
   >(null);
 
-  const originAC = useCustomPlacesAutocomplete({ initialInput: defaultOrigin });
-  const destAC = useCustomPlacesAutocomplete({
-    initialInput: defaultDestination,
-  });
+  const originAC = useCustomPlacesAutocomplete({ initialInput: defaultOrigin, userLocation });
+  const destAC = useCustomPlacesAutocomplete({ initialInput: defaultDestination, userLocation });
 
-  // Auto-search when both selections are made via dropdown
+  // Auto-search when a prediction is selected and the other field has any value
   useEffect(() => {
     if (skipNextAutoSearchRef.current) {
       skipNextAutoSearchRef.current = false;
       return;
     }
 
-    if (originAC.selectedPrediction && destAC.selectedPrediction) {
-      onSearch(
-        { placeId: originAC.selectedPrediction.place_id },
-        { placeId: destAC.selectedPrediction.place_id },
-      );
+    // At least one field must have just been selected from autocomplete
+    if (!originAC.selectedPrediction && !destAC.selectedPrediction) return;
+
+    const origin = originAC.selectedPrediction
+      ? { placeId: originAC.selectedPrediction.place_id }
+      : originAC.input;
+
+    const destination = destAC.selectedPrediction
+      ? { placeId: destAC.selectedPrediction.place_id }
+      : destAC.input;
+
+    // If one field is still empty, focus it so the user knows to fill it in
+    if (!origin) {
+      originInputRef.current?.focus();
+      return;
     }
+    if (!destination) {
+      destInputRef.current?.focus();
+      return;
+    }
+
+    onSearch(origin, destination, originAC.input, destAC.input);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [originAC.selectedPrediction, destAC.selectedPrediction]);
 
@@ -71,7 +91,7 @@ export default function RouteSearch({
       : nextDestinationInput;
 
     if (nextOrigin && nextDestination) {
-      onSearch(nextOrigin, nextDestination);
+      onSearch(nextOrigin, nextDestination, nextOriginInput, nextDestinationInput);
     }
   };
 
@@ -83,7 +103,7 @@ export default function RouteSearch({
     const d = destAC.selectedPrediction
       ? { placeId: destAC.selectedPrediction.place_id }
       : destAC.input;
-    if (o && d) onSearch(o, d);
+    if (o && d) onSearch(o, d, originAC.input, destAC.input);
   };
 
   const showOriginDropdown =
@@ -114,6 +134,20 @@ export default function RouteSearch({
     originAC.setInput(selected.description);
     originAC.setSelectedPrediction(selected);
     originAC.setActiveIndex(null);
+  };
+
+  const handleClearOrigin = () => {
+    originAC.setInput("");
+    originAC.setSelectedPrediction(null);
+    originAC.setActiveIndex(null);
+    originInputRef.current?.focus();
+  };
+
+  const handleClearDest = () => {
+    destAC.setInput("");
+    destAC.setSelectedPrediction(null);
+    destAC.setActiveIndex(null);
+    destInputRef.current?.focus();
   };
 
   const selectDestPrediction = (index: number) => {
@@ -192,7 +226,7 @@ export default function RouteSearch({
 
   return (
     <form
-      className="bg-card-bg p-3 sm:p-4 rounded-lg shadow-lg flex flex-col gap-2 sm:gap-3 border border-border"
+      className="bg-card-bg p-2.5 sm:p-4 rounded-lg shadow-lg flex flex-col gap-2 sm:gap-3 border border-border"
       onSubmit={handleSubmit}
     >
       {/* Origin + Destination with simplified route indicator */}
@@ -210,11 +244,12 @@ export default function RouteSearch({
             {/* Origin input + dropdown */}
             <div className="relative">
               <input
+                ref={originInputRef}
                 type="text"
                 id="origin"
-                className="w-full px-4 py-2.5 border border-border rounded-md 
+                className={`w-full pl-4 py-2 sm:py-2.5 border border-border rounded-md 
                   bg-app-bg text-text-primary placeholder:text-text-muted 
-                  focus:outline-none focus:ring-2 focus:ring-accent-ring/70"
+                  focus:outline-none focus:ring-2 focus:ring-accent-ring/70 ${originAC.input ? "pr-8" : "pr-4"}`}
                 placeholder="Starting point"
                 value={originAC.input}
                 onChange={handleOriginChange}
@@ -222,13 +257,25 @@ export default function RouteSearch({
                 onKeyDown={handleOriginKeyDown}
                 autoComplete="off"
               />
+              {originAC.input && (
+                <button
+                  type="button"
+                  onMouseDown={(e) => { e.preventDefault(); handleClearOrigin(); }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-text-primary transition-colors"
+                  aria-label="Clear origin"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
               <AnimatePresence>
                 {showOriginDropdown && (
                   <motion.ul
                     initial={{ opacity: 0, y: -4 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -4 }}
-                    transition={{ duration: 0.15 }}
+                    transition={{ duration: 0.2 }}
                     className="absolute z-50 top-full left-0 right-0 mt-1 bg-card-bg border border-border rounded-md shadow-xl overflow-hidden"
                   >
                     {originAC.predictions.map((p, i) => (
@@ -257,11 +304,12 @@ export default function RouteSearch({
             {/* Destination input + dropdown */}
             <div className="relative">
               <input
+                ref={destInputRef}
                 type="text"
                 id="destination"
-                className="w-full px-4 py-2.5 pr-10 border border-border rounded-md
+                className={`w-full pl-4 py-2 sm:py-2.5 border border-border rounded-md
                   bg-app-bg text-text-primary placeholder:text-text-muted
-                  focus:outline-none focus:ring-2 focus:ring-accent-ring/70"
+                  focus:outline-none focus:ring-2 focus:ring-accent-ring/70 ${destAC.input ? "pr-8" : "pr-4"}`}
                 placeholder="Destination"
                 value={destAC.input}
                 onChange={handleDestChange}
@@ -269,33 +317,26 @@ export default function RouteSearch({
                 onKeyDown={handleDestKeyDown}
                 autoComplete="off"
               />
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-primary disabled:text-text-muted/50 transition-colors"
-                aria-label="Search"
-              >
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
+              {destAC.input && (
+                <button
+                  type="button"
+                  onMouseDown={(e) => { e.preventDefault(); handleClearDest(); }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-text-primary transition-colors"
+                  aria-label="Clear destination"
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                  />
-                </svg>
-              </button>
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+
               <AnimatePresence>
                 {showDestDropdown && (
                   <motion.ul
                     initial={{ opacity: 0, y: -4 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -4 }}
-                    transition={{ duration: 0.15 }}
+                    transition={{ duration: 0.2 }}
                     className="absolute z-50 top-full left-0 right-0 mt-1 bg-card-bg border border-border rounded-md shadow-xl overflow-hidden"
                   >
                     {destAC.predictions.map((p, i) => (

@@ -31,7 +31,7 @@ Last Updated: March 19, 2026 (session 5)
 - [x] Reduced navbar height slightly and moved results left panel lower on desktop to prevent overlap with the Current Location input
 - [x] Refined RouteSearch to a cleaner minimalist layout (simplified connector, compact control spacing, subtle From/To labels, GPS state chip for Current Location)
 - [x] Modernized route option cards with lighter visual weight, clear Selected/Best badges, and improved scan hierarchy
-- [x] Streamlined flow by auto-selecting the fastest deduplicated route and preloading nearby restaurants immediately after search
+- [x] Updated flow to require explicit route selection before restaurant fetch, giving users direct control over route choice
 - [x] Further decluttered RouteSearch for mobile-first minimalism by removing From/To labels, GPS chip, and swap control row to reduce vertical density
 - [x] Reintroduced swap action as a compact floating right-rail button (Google Maps-inspired) to keep functionality without adding vertical bulk
 - [x] Rotated floating swap icon 90° for correct visual orientation
@@ -43,6 +43,12 @@ Last Updated: March 19, 2026 (session 5)
 - [x] Added anti-abuse route guardrails: block searches beyond max commute duration/distance (90 min / 45 km) to control API cost
 - [x] Hardened Places fan-out algorithm: added active-search token guard to ignore stale in-flight callbacks from older searches
 - [x] Smoothed Places API QPS and resilience: bounded concurrent nearby searches plus one retry for transient statuses (`OVER_QUERY_LIMIT` / `UNKNOWN_ERROR`)
+- [x] Added motion polish for smoother perceived UX: minimum restaurant loading display window, softer results-panel easing, and gentler autocomplete/bottom-sheet timings
+- [x] Improved route visibility: map now auto-fits bounds after route search/selection so users can see the full route without manual zooming
+- [x] Tuned selected-route fit behavior to avoid over-zoom by adding stronger viewport padding and max fit-zoom clamping
+- [x] Adjusted selected-route framing to zoom in ~25% more (tighter fit padding + higher selected-route max zoom clamp)
+- [x] Fixed route-selection camera jitter by removing post-fit zoom clamp (single smooth fit transition, no zoom-in then zoom-out)
+- [x] Rebalanced selected-route camera framing to zoom out more (increased selected-route fit padding) after user feedback
 
 ### Mobile/Tablet Polish — Session 4 (Feb 21, 2026)
 
