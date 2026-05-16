@@ -2,6 +2,7 @@ interface RouteOptionCardProps {
   route: google.maps.DirectionsRoute;
   routeIndex: number;
   isSelected: boolean;
+  isRecommended?: boolean;
   onSelect: (routeIndex: number) => void;
 }
 
@@ -41,6 +42,7 @@ export default function RouteOptionCard({
   route,
   routeIndex,
   isSelected,
+  isRecommended,
   onSelect,
 }: RouteOptionCardProps) {
   const leg = route.legs[0];
@@ -57,19 +59,32 @@ export default function RouteOptionCard({
   return (
     <button
       onClick={() => onSelect(routeIndex)}
-      className={`w-full text-left px-4 py-3 rounded-lg border-2 transition-all ${
+      className={`relative w-full text-left px-4 py-3 rounded-lg border transition-colors ${
         isSelected
           ? "border-primary bg-primary/10"
-          : "border-border bg-card-bg hover:border-primary/50"
+          : "border-border bg-card-bg hover:border-primary/40"
       }`}
     >
+      {isSelected && (
+        <span className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-primary" />
+      )}
       <div className="flex items-center justify-between gap-3">
         <div className="flex-1 min-w-0">
-          {/* Transit lines as headline */}
-          <div className="font-semibold text-text-primary text-sm truncate">
-            {routeHeadline}
+          <div className="flex items-center gap-2">
+            <div className="font-semibold text-text-primary text-sm truncate">
+              {routeHeadline}
+            </div>
+            {isRecommended && !isSelected && (
+              <span className="shrink-0 inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                Best
+              </span>
+            )}
+            {isSelected && (
+              <span className="shrink-0 inline-flex items-center rounded-full border border-primary/30 bg-primary/15 px-2 py-0.5 text-[10px] font-medium text-primary">
+                Selected
+              </span>
+            )}
           </div>
-          {/* Duration + transfers */}
           <div className="text-xs text-text-muted mt-0.5">
             {duration} ·{" "}
             {transfers === 0
@@ -77,12 +92,6 @@ export default function RouteOptionCard({
               : `${transfers} transfer${transfers > 1 ? "s" : ""}`}
           </div>
         </div>
-
-        {isSelected && (
-          <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center shrink-0">
-            <span className="text-white text-xs">✓</span>
-          </div>
-        )}
       </div>
     </button>
   );

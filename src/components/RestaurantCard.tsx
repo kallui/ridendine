@@ -13,19 +13,29 @@ export default function RestaurantCard({
   return (
     <div
       onClick={() => onClick(restaurant)}
-      className="bg-card-bg border-2 border-border rounded-lg p-4 hover:shadow-lg hover:shadow-primary/20 hover:border-primary transition-all cursor-pointer"
+      className="bg-card-bg border border-border rounded-lg px-3 py-2.5 hover:border-primary/60 hover:shadow-md hover:shadow-primary/10 transition-all cursor-pointer"
     >
-      {/* Restaurant Name */}
-      <h3 className="font-bold text-lg text-text-primary line-clamp-1 mb-2">
-        {restaurant.name}
-      </h3>
+      {/* Row 1: Name + Maps link */}
+      <div className="flex items-start justify-between gap-2 mb-1">
+        <h3 className="font-semibold text-sm text-text-primary line-clamp-1 leading-snug">
+          {restaurant.name}
+        </h3>
+        <a
+          href={`https://www.google.com/maps/search/?api=1&query=Google&query_place_id=${restaurant.placeId}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="shrink-0 p-1 text-text-muted hover:text-primary transition-colors"
+          aria-label="View on Google Maps"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+          </svg>
+        </a>
+      </div>
 
-      {/* Shared restaurant details component */}
-      <RestaurantDetails
-        restaurant={restaurant}
-        variant="card"
-        onClick={() => onClick(restaurant)}
-      />
+      {/* Row 2: rating · price · distance */}
+      <RestaurantDetails restaurant={restaurant} variant="card" onClick={() => onClick(restaurant)} />
     </div>
   );
 }

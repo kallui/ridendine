@@ -70,7 +70,7 @@ export default function RestaurantSidebar({
     return (
       <div className="h-full flex flex-col">
         {/* Fixed header — never scrolls */}
-        <div className="shrink-0 bg-card-bg px-4 py-3 border-b border-gray-800 space-y-2">
+        <div className="shrink-0 bg-card-bg px-4 py-3 border-b border-border space-y-2">
           {/* Back button + route summary — only shown in sheet variant */}
           {onBack && (
             <div className="flex items-center justify-between gap-2">
@@ -92,7 +92,7 @@ export default function RestaurantSidebar({
             placeholder="Search restaurants..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-700 rounded-md bg-app-bg text-gray-100 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
+            className="w-full px-4 py-2 border border-border rounded-md bg-app-bg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-accent-ring text-sm"
           />
           <div className="flex items-center justify-between">
             <div className="flex gap-1">
@@ -106,7 +106,7 @@ export default function RestaurantSidebar({
                   className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
                     minRating === opt.value
                       ? "bg-primary text-white"
-                      : "bg-app-bg text-text-muted border border-gray-700 hover:border-primary/50 hover:text-text-secondary"
+                      : "bg-app-bg text-text-muted border border-border hover:border-primary/50 hover:text-text-secondary"
                   }`}
                 >
                   {opt.label}
@@ -122,7 +122,7 @@ export default function RestaurantSidebar({
                   className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
                     sortBy === opt
                       ? "bg-primary text-white"
-                      : "bg-app-bg text-text-muted border border-gray-700 hover:border-primary/50 hover:text-text-secondary"
+                      : "bg-app-bg text-text-muted border border-border hover:border-primary/50 hover:text-text-secondary"
                   }`}
                 >
                   {opt === "distance" ? "Nearest" : "Top rated"}
@@ -157,14 +157,14 @@ export default function RestaurantSidebar({
     <>
       {/* Sidebar — hidden on mobile (BottomSheet handles mobile) */}
       <div
-        className={`hidden lg:block absolute top-4 right-0 bottom-10 bg-card-bg shadow-2xl border border-gray-800 rounded-tl-xl rounded-bl-xl transition-all duration-300 ease-in-out z-20 ${
+        className={`hidden lg:block absolute top-4 right-0 bottom-10 bg-card-bg shadow-2xl border border-border rounded-tl-xl rounded-bl-xl transition-all duration-300 ease-in-out z-20 ${
           isCollapsed ? "w-0" : "w-96"
         }`}
       >
         {!isCollapsed && (
           <div className="h-full flex flex-col">
             {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-800 shrink-0">
+            <div className="flex items-center justify-between p-4 border-b border-border shrink-0">
               <h2 className="text-xl font-bold text-text-primary">
                 {isFiltered
                   ? `${filteredRestaurants.length} of ${restaurants.length}`
@@ -177,7 +177,7 @@ export default function RestaurantSidebar({
                 aria-label="Collapse sidebar"
               >
                 <svg
-                  className="w-5 h-5 text-gray-600"
+                  className="w-5 h-5 text-text-muted"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -193,14 +193,14 @@ export default function RestaurantSidebar({
             </div>
 
             {/* Filters */}
-            <div className="px-4 py-3 border-b border-gray-800 space-y-2 shrink-0">
+            <div className="px-4 py-3 border-b border-border space-y-2 shrink-0">
               {/* Search by name */}
               <input
                 type="text"
                 placeholder="Search restaurants..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-700 rounded-md bg-app-bg text-gray-100 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
+                className="w-full px-4 py-2 border border-border rounded-md bg-app-bg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-accent-ring text-sm"
               />
 
               {/* Rating + Sort on one row */}
@@ -217,7 +217,7 @@ export default function RestaurantSidebar({
                       className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
                         minRating === opt.value
                           ? "bg-primary text-white"
-                          : "bg-app-bg text-text-muted border border-gray-700 hover:border-primary/50 hover:text-text-secondary"
+                          : "bg-app-bg text-text-muted border border-border hover:border-primary/50 hover:text-text-secondary"
                       }`}
                     >
                       {opt.label}
@@ -235,7 +235,7 @@ export default function RestaurantSidebar({
                       className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
                         sortBy === opt
                           ? "bg-primary text-white"
-                          : "bg-app-bg text-text-muted border border-gray-700 hover:border-primary/50 hover:text-text-secondary"
+                          : "bg-app-bg text-text-muted border border-border hover:border-primary/50 hover:text-text-secondary"
                       }`}
                     >
                       {opt === "distance" ? "Nearest" : "Top rated"}
@@ -271,11 +271,11 @@ export default function RestaurantSidebar({
       {isCollapsed && (
         <button
           onClick={() => setIsCollapsed(false)}
-          className="hidden sm:block absolute top-1/2 right-4 -translate-y-1/2 z-20 bg-card-bg shadow-lg border border-gray-800 p-3 rounded-full hover:bg-app-bg transition-colors"
+          className="hidden sm:block absolute top-1/2 right-4 -translate-y-1/2 z-20 bg-card-bg shadow-lg border border-border p-3 rounded-full hover:bg-app-bg transition-colors"
           aria-label="Expand sidebar"
         >
           <svg
-            className="w-6 h-6 text-gray-600"
+            className="w-6 h-6 text-text-muted"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"

@@ -1,36 +1,81 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Ride'N'Dine
+
+A progressive web app (PWA) that helps commuters discover restaurants and food stops along their transit route.
+
+> **Status:** Work in progress — not yet public.
+
+## What It Does
+
+Enter an origin and destination, pick a transit route, and Ride'N'Dine surfaces nearby restaurants along the way. No detours, no guesswork — just food that fits your commute.
+
+## Tech Stack
+
+| Layer      | Technology                                         |
+| ---------- | -------------------------------------------------- |
+| Framework  | Next.js 15 (App Router)                            |
+| Language   | TypeScript                                         |
+| Styling    | Tailwind CSS v4                                    |
+| Maps       | Google Maps via `@vis.gl/react-google-maps` v1.7.1 |
+| Geospatial | Turf.js (`@turf/turf`)                             |
+| PWA        | `next-pwa`                                         |
+
+## Architecture
+
+Ride'N'Dine uses a **polyline-based filtering approach** to keep API costs low:
+
+1. Fetch the transit route from the **Directions API** (1 call)
+2. Run a single **Places API Nearby Search** within the route bounding box (1–2 calls)
+3. Filter results **client-side** using Turf.js — restaurants within 500 m of the route polyline
+4. Display filtered restaurants as map markers with a sortable/filterable sidebar
+
+This keeps usage to ~2–3 API calls per search, supporting roughly 3,000–5,000 route searches per month on the free tier.
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- Node.js 18+
+- A [Google Maps Platform](https://developers.google.com/maps) API key with the following APIs enabled:
+  - Maps JavaScript API
+  - Directions API
+  - Places API
+
+### Environment Variables
+
+Create a `.env.local` file in the project root:
+
+```
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your_api_key_here
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Running Locally
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm install
+npm run dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Open [http://localhost:3000](http://localhost:3000).
 
-## Learn More
+## Project Structure
 
-To learn more about Next.js, take a look at the following resources:
+```
+src/
+  app/            # Next.js App Router (layout, page, globals)
+  components/     # UI components (Map, Sidebar, RouteSearch, etc.)
+  hooks/          # Custom React hooks
+docs/
+  ARCHITECTURE.md # API strategy and cost analysis
+  KANBAN.md       # Project task board
+  LEARNING_PATH.md
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Docs
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- [Architecture & API strategy](docs/ARCHITECTURE.md)
+- [Project Kanban board](docs/KANBAN.md)
+- [Learning path](docs/LEARNING_PATH.md)
 
-## Deploy on Vercel
+## Deployment
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The app is deployed on [Vercel](https://vercel.com). Add `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` as an environment variable in your Vercel project settings and restrict the API key to your Vercel domain in the Google Cloud Console.

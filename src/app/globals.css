@@ -4,19 +4,36 @@
    App Color System
    =================================== */
 :root {
-  /* Original Tailwind defaults (for light mode if needed) */
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Light mode default: neutral with lighter indigo accents */
+  --background: #f2f5ff;
+  --foreground: #1b2239;
+  --app-bg: #f2f5ff;
+  --card-bg: #f4f7ff;
+  --primary: #7c8cff;
+  --primary-hover: #6c7df4;
+  --accent-indigo: #90a0ff;
+  --accent-indigo-ring: #a8b5ff;
+  --accent-indigo-soft: #eaf0ff;
+  --border: #d7def8;
+  --text-primary: #1b2239;
+  --text-secondary: #4f5f86;
+  --text-muted: #7480a3;
+}
 
-  /* Ride'N'Dine Dark Theme Colors */
-  --app-bg: #1a1a1a; /* Main app background */
-  --card-bg: #2a2a2a; /* Card/component background */
-  --primary: #10b981; /* Emerald green (brand color) */
-  --primary-hover: #059669; /* Darker emerald for hover */
-  --border: #374151; /* Gray-700 for borders */
-  --text-primary: #f3f4f6; /* Gray-100 for main text */
-  --text-secondary: #9ca3af; /* Gray-400 for secondary text */
-  --text-muted: #6b7280; /* Gray-500 for muted text */
+:root[data-theme="dark"] {
+  --background: #0e1324;
+  --foreground: #e9eeff;
+  --app-bg: #0e1324;
+  --card-bg: #171d33;
+  --primary: #8d9cff;
+  --primary-hover: #7c8cff;
+  --accent-indigo: #9ba8ff;
+  --accent-indigo-ring: #b7c2ff;
+  --accent-indigo-soft: #2a3257;
+  --border: #303a64;
+  --text-primary: #e9eeff;
+  --text-secondary: #a8b3d6;
+  --text-muted: #8690b6;
 }
 
 @theme inline {
@@ -25,6 +42,9 @@
   --color-card-bg: var(--card-bg);
   --color-primary: var(--primary);
   --color-primary-hover: var(--primary-hover);
+  --color-accent: var(--accent-indigo);
+  --color-accent-ring: var(--accent-indigo-ring);
+  --color-accent-soft: var(--accent-indigo-soft);
   --color-border: var(--border);
   --color-text-primary: var(--text-primary);
   --color-text-secondary: var(--text-secondary);
@@ -36,9 +56,20 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  :root:not([data-theme]) {
+    --background: #0e1324;
+    --foreground: #e9eeff;
+    --app-bg: #0e1324;
+    --card-bg: #171d33;
+    --primary: #8d9cff;
+    --primary-hover: #7c8cff;
+    --accent-indigo: #9ba8ff;
+    --accent-indigo-ring: #b7c2ff;
+    --accent-indigo-soft: #2a3257;
+    --border: #303a64;
+    --text-primary: #e9eeff;
+    --text-secondary: #a8b3d6;
+    --text-muted: #8690b6;
   }
 }
 
@@ -80,7 +111,8 @@ body {
 
 /* Google Maps InfoWindow Dark Theme */
 .gm-style .gm-style-iw-c {
-  background-color: #2a2a2a !important;
+  background-color: var(--card-bg) !important;
+  color: var(--text-primary) !important;
   border-radius: 8px !important;
   padding: 0 !important;
   box-shadow: 0 2px 7px 1px rgba(0, 0, 0, 0.5) !important;
@@ -91,7 +123,7 @@ body {
 }
 
 .gm-style .gm-style-iw-t::after {
-  background: #2a2a2a !important;
+  background: var(--card-bg) !important;
   box-shadow: -2px 2px 2px 0 rgba(0, 0, 0, 0.3) !important;
 }
 
@@ -101,25 +133,28 @@ body {
 }
 
 .gm-style .gm-ui-hover-effect > span {
-  background-color: #e5e7eb !important;
+  background-color: var(--text-secondary) !important;
 }
 
 /* Google Places Autocomplete Styling */
 .pac-container {
+  background-color: var(--card-bg);
   border-radius: 8px;
   margin-top: 4px;
   box-shadow:
     0 10px 15px -3px rgb(0 0 0 / 0.1),
     0 4px 6px -4px rgb(0 0 0 / 0.1);
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border);
   font-family: inherit;
 }
 
 .pac-item {
+  background-color: var(--card-bg);
+  color: var(--text-primary);
   padding: 8px 12px;
   cursor: pointer;
   font-size: 14px;
-  border-top: 1px solid #f3f4f6;
+  border-top: 1px solid var(--border);
 }
 
 .pac-item:first-child {
@@ -127,16 +162,16 @@ body {
 }
 
 .pac-item:hover {
-  background-color: #f9fafb;
+  background-color: var(--accent-indigo-soft);
 }
 
 .pac-item-selected {
-  background-color: #eff6ff !important;
+  background-color: var(--accent-indigo-soft) !important;
 }
 
 .pac-matched {
   font-weight: 600;
-  color: #0369a1;
+  color: var(--primary);
 }
 
 .pac-icon {
