@@ -84,7 +84,7 @@ export function ThemedAutocompleteInput({
                 className={
                   "px-6 py-4 cursor-pointer transition " +
                   (activeIndex === i
-                    ? "bg-accent text-white "
+                    ? "bg-accent text-primary-fg "
                     : "hover:bg-accent-soft/60 text-text-primary ")
                 }
                 onMouseDown={() => {

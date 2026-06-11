@@ -7,11 +7,19 @@ import RestaurantSidebar from "@/components/RestaurantSidebar";
 import RouteSelectionPanel from "@/components/RouteSelectionPanel";
 import BottomSheet from "@/components/BottomSheet";
 import { getRouteHeadline } from "@/components/RouteOptionCard";
-import { APIProvider, useMapsLibrary } from "@vis.gl/react-google-maps";
+import { APIProvider } from "@vis.gl/react-google-maps";
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useCustomPlacesAutocomplete } from "@/hooks/useCustomPlacesAutocomplete";
 import { ThemedAutocompleteInput } from "@/components/ThemedAutocompleteInput";
+import {
+  parseApiError,
+  useRouteSearchGuards,
+} from "@/lib/client/search-guards";
+import { normalizeDirectionsResult } from "@/lib/directions-normalize";
+import { extractPolylineCoordinates } from "@/lib/directions-paths";
+import type { PlaceSearchResult } from "@/lib/places-types";
+import { computeSearchPoints } from "@/lib/route-sampling";
 import * as turf from "@turf/turf";
 
 export type Restaurant = {
@@ -54,16 +62,21 @@ function MapContent() {
     selectedPrediction,
     setSelectedPrediction,
   } = useCustomPlacesAutocomplete({ userLocation });
-  const [routeLimitError, setRouteLimitError] = useState<string | null>(null);
+  const [routeError, setRouteError] = useState<string | null>(null);
+  const [isFetchingDirections, setIsFetchingDirections] = useState(false);
+  const {
+    canSearch,
+    dailyLimitReached,
+    count: searchCount,
+    dailyLimit,
+    recordSearch,
+  } = useRouteSearchGuards();
   // === SEARCH CONFIGURATION ===
   const turfFilterDistance = 750; // Turf.js filter: keep restaurants within this distance from route (meters)
   const apiSearchRadius = 1300; // API search radius: cast wider net, then filter with Turf.js (meters)
   const searchInterval = 2.5; // Sample points along route every X km for API searches
   const maxCommuteMinutes = 90; // Guardrail: avoid very long trips that can trigger many downstream API calls
   const maxRouteDistanceKm = 45;
-  const maxPlacesConcurrency = 3;
-  const maxPlacesRetries = 1;
-  const placesRetryDelayMs = 350;
   const minRestaurantLoadingMs = 450;
 
   // === MAP/ROUTE STATE ===
@@ -175,9 +188,7 @@ function MapContent() {
       ? (searchCircleCache[selectedRouteIndex] ?? [])
       : [];
 
-  // === MAP LIBRARIES ===
-  const routeLib = useMapsLibrary("routes");
-  const placesLib = useMapsLibrary("places");
+  // === MAP CONFIG ===
   const mapId =
     themeMode === "dark"
       ? (process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID_DARK ??
@@ -185,14 +196,27 @@ function MapContent() {
       : (process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID_LIGHT ??
         process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID);
 
-  const handleGetDirection = (
+  const serializeWaypoint = (
+    waypoint: string | google.maps.LatLngLiteral | google.maps.Place,
+  ): string | { lat: number; lng: number } | { placeId: string } | null => {
+    if (typeof waypoint === "string") {
+      const trimmed = waypoint.trim();
+      return trimmed || null;
+    }
+    if ("placeId" in waypoint && waypoint.placeId) {
+      return { placeId: waypoint.placeId };
+    }
+    if ("lat" in waypoint && "lng" in waypoint) {
+      return { lat: waypoint.lat, lng: waypoint.lng };
+    }
+    return null;
+  };
+
+  const handleGetDirection = async (
     origin: string | google.maps.LatLngLiteral | google.maps.Place,
     destination: string | google.maps.Place,
   ) => {
-    if (!routeLib) {
-      console.error("Routes library not loaded yet");
-      return;
-    }
+    if (!canSearch || isFetchingDirections || isSearchingRestaurants) return;
 
     const directionsRequestId = ++activeDirectionsRequestIdRef.current;
 
@@ -233,94 +257,116 @@ function MapContent() {
       return;
     }
 
-    const directionsService = new routeLib.DirectionsService();
+    const apiOrigin = serializeWaypoint(normalizedOrigin);
+    const apiDestination = serializeWaypoint(normalizedDestination);
 
-    const isRouteWithinLimit = (route: google.maps.DirectionsRoute) => {
-      const leg = route.legs[0];
-      const durationMinutes = (leg.duration?.value ?? Infinity) / 60;
-      const distanceKm = (leg.distance?.value ?? Infinity) / 1000;
-      return (
-        durationMinutes <= maxCommuteMinutes && distanceKm <= maxRouteDistanceKm
+    if (!apiOrigin || !apiDestination) {
+      return;
+    }
+
+    setIsFetchingDirections(true);
+    setRouteError(null);
+
+    try {
+      const response = await fetch("/api/directions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          origin: apiOrigin,
+          destination: apiDestination,
+        }),
+      });
+
+      if (directionsRequestId !== activeDirectionsRequestIdRef.current) {
+        return;
+      }
+
+      if (!response.ok) {
+        setRouteError(await parseApiError(response));
+        setViewState("results");
+        setIsSearchExpanded(true);
+        return;
+      }
+
+      const data = (await response.json()) as {
+        status: string;
+        routes: google.maps.DirectionsRoute[];
+        geocoded_waypoints?: google.maps.DirectionsGeocodedWaypoint[];
+        request?: google.maps.DirectionsRequest;
+      };
+
+      if (data.status !== "OK" || !data.routes?.length) {
+        setRouteError("Could not find a route for those locations.");
+        return;
+      }
+
+      const isRouteWithinLimit = (route: google.maps.DirectionsRoute) => {
+        const leg = route.legs[0];
+        const durationMinutes = (leg.duration?.value ?? Infinity) / 60;
+        const distanceKm = (leg.distance?.value ?? Infinity) / 1000;
+        return (
+          durationMinutes <= maxCommuteMinutes &&
+          distanceKm <= maxRouteDistanceKm
+        );
+      };
+
+      const seen = new Set<string>();
+      const uniqueRoutes = data.routes.filter((route) => {
+        const headline = getRouteHeadline(route);
+        const isDupe = seen.has(headline);
+        if (isDupe) return false;
+        seen.add(headline);
+        return true;
+      });
+
+      const limitedRoutes = uniqueRoutes.filter(isRouteWithinLimit);
+
+      if (limitedRoutes.length === 0) {
+        setDirectionsResult(null);
+        setRoutes([]);
+        setSelectedRouteIndex(null);
+        setSelectedRestaurant(null);
+        setRestaurantCache({});
+        setSearchCircleCache({});
+        setViewState("results");
+        setRouteError(
+          `Trips longer than ${maxCommuteMinutes} min or ${maxRouteDistanceKm} km are not supported. Try a closer destination.`,
+        );
+        return;
+      }
+
+      setRouteError(null);
+      recordSearch();
+      setDirectionsResult(
+        normalizeDirectionsResult(
+          { ...data, routes: limitedRoutes },
+          { origin: apiOrigin, destination: apiDestination },
+        ),
       );
-    };
-
-    directionsService.route(
-      {
-        origin: normalizedOrigin,
-        destination: normalizedDestination,
-        travelMode: routeLib.TravelMode.TRANSIT,
-        provideRouteAlternatives: true, // Request 2-3 alternative routes
-      },
-      (result, status) => {
-        if (directionsRequestId !== activeDirectionsRequestIdRef.current) {
-          return;
-        }
-
-        if (status === routeLib.DirectionsStatus.OK && result) {
-          // Deduplicate routes by headline + duration — Google returns the same
-          // route at different departure times, which are identical for our purposes
-          const seen = new Set<string>();
-          const uniqueRoutes = result.routes.filter((route) => {
-            const headline = getRouteHeadline(route);
-            const isDupe = seen.has(headline);
-            if (isDupe) return false;
-            seen.add(headline);
-            return true;
-          });
-
-          const limitedRoutes = uniqueRoutes.filter(isRouteWithinLimit);
-
-          if (limitedRoutes.length === 0) {
-            setDirectionsResult(null);
-            setRoutes([]);
-            setSelectedRouteIndex(null);
-            setSelectedRestaurant(null);
-            setRestaurantCache({});
-            setSearchCircleCache({});
-            setViewState("results");
-            setRouteLimitError(
-              `Trips longer than ${maxCommuteMinutes} minutes or ${maxRouteDistanceKm} km are blocked to control API usage. Try a closer destination.`,
-            );
-            return;
-          }
-
-          setRouteLimitError(null);
-
-          setDirectionsResult(result);
-          setRoutes(limitedRoutes);
-          setSelectedRouteIndex(null);
-          setSelectedRestaurant(null);
-          setRestaurantCache({});
-          setSearchCircleCache({});
-
-          // Route results are shown, but restaurants are fetched only after
-          // an explicit route selection by the user.
-        } else {
-          console.error("Error fetching directions:", status);
-        }
-      },
-    );
+      setRoutes(limitedRoutes);
+      setSelectedRouteIndex(null);
+      setSelectedRestaurant(null);
+      setRestaurantCache({});
+      setSearchCircleCache({});
+    } catch (error) {
+      if (directionsRequestId !== activeDirectionsRequestIdRef.current) {
+        return;
+      }
+      console.error("Error fetching directions:", error);
+      setRouteError("Failed to fetch directions. Please try again.");
+    } finally {
+      if (directionsRequestId === activeDirectionsRequestIdRef.current) {
+        setIsFetchingDirections(false);
+      }
+    }
   };
 
   const extractPolylineFromRoute = (
     route: google.maps.DirectionsRoute,
     routeIndex: number,
   ) => {
-    const steps = route.legs[0].steps;
-
-    // Extract coordinates from all steps (walking + transit)
-    const polylineCoordinates = steps
-      .filter((step) => step.path && step.path.length > 0)
-      .flatMap((step) =>
-        step.path.map((coord) => ({
-          lat: coord.lat(),
-          lng: coord.lng(),
-        })),
-      );
-
-    // Search for restaurants within filter distance of route
+    const polylineCoordinates = extractPolylineCoordinates(route);
     searchRestaurants(polylineCoordinates, turfFilterDistance, routeIndex);
-
     return polylineCoordinates;
   };
 
@@ -329,25 +375,20 @@ function MapContent() {
     setSelectedRouteIndex(routeIndex);
     // Cache hit: already searched this route, reuse results — no API call
     if (restaurantCache[routeIndex] !== undefined) {
-      setRouteLimitError(null);
+      setRouteError(null);
       return;
     }
     // Cache miss: first time selecting this route, search now
     const selectedRoute = routes[routeIndex];
-    setRouteLimitError(null);
+    setRouteError(null);
     extractPolylineFromRoute(selectedRoute, routeIndex);
   };
 
-  const searchRestaurants = (
+  const searchRestaurants = async (
     polylineCoordinates: google.maps.LatLngLiteral[],
     filterDistance: number,
     routeIndex: number,
   ) => {
-    if (!placesLib) {
-      console.error("Places library not loaded yet");
-      return;
-    }
-
     const searchId = ++activeRestaurantSearchIdRef.current;
     const searchStartedAt = Date.now();
     setIsSearchingRestaurants(true);
@@ -368,158 +409,58 @@ function MapContent() {
       }, remainingMs);
     };
 
-    // Create Turf.js line from route
-    const turfCoords = polylineCoordinates.map((c) => [c.lng, c.lat]);
-    const routeLine = turf.lineString(turfCoords);
-    const routeLength = turf.length(routeLine, { units: "kilometers" });
-
-    // Sample points along the route (including end) and skip near-duplicate
-    // centers so we don't pay for heavily overlapping API calls.
-    const candidateDistancesKm: number[] = [];
-    for (let distance = 0; distance < routeLength; distance += searchInterval) {
-      candidateDistancesKm.push(distance);
-    }
-    candidateDistancesKm.push(routeLength);
-
-    const minCenterSpacingKm = Math.max(
-      searchInterval * 0.6,
-      (apiSearchRadius / 1000) * 1.15,
-    );
-    const searchPoints: google.maps.LatLngLiteral[] = [];
-
-    const shouldAddCenter = (center: google.maps.LatLngLiteral) => {
-      const candidatePoint = turf.point([center.lng, center.lat]);
-      return !searchPoints.some((existing) => {
-        const existingPoint = turf.point([existing.lng, existing.lat]);
-        const centerDistanceKm = turf.distance(candidatePoint, existingPoint, {
-          units: "kilometers",
-        });
-        return centerDistanceKm < minCenterSpacingKm;
-      });
-    };
-
-    candidateDistancesKm.forEach((distance) => {
-      const point = turf.along(routeLine, distance, { units: "kilometers" });
-      const [lng, lat] = point.geometry.coordinates;
-      const center = { lat, lng };
-      if (shouldAddCenter(center)) {
-        searchPoints.push(center);
-      }
+    const searchPoints = computeSearchPoints(polylineCoordinates, {
+      searchIntervalKm: searchInterval,
+      apiSearchRadiusM: apiSearchRadius,
     });
 
-    // Safety fallback for very short/degenerate routes.
-    if (searchPoints.length === 0) {
-      const point = turf.along(routeLine, 0, { units: "kilometers" });
-      const [lng, lat] = point.geometry.coordinates;
-      searchPoints.push({ lat, lng });
-    }
-
-    // Store search circles in cache for this route
     const circles: SearchCircle[] = searchPoints.map((center) => ({
       center,
       radius: apiSearchRadius,
     }));
     setSearchCircleCache((prev) => ({ ...prev, [routeIndex]: circles }));
 
-    // Perform multiple searches and collect all results
-    const allPlaces: { [key: string]: google.maps.places.PlaceResult } = {};
-    const service = new placesLib.PlacesService(document.createElement("div"));
-    const fetchNearbySearch = (
-      point: google.maps.LatLngLiteral,
-      attempt = 0,
-    ): Promise<google.maps.places.PlaceResult[]> => {
-      return new Promise((resolve) => {
-        service.nearbySearch(
-          {
-            location: point,
-            radius: apiSearchRadius,
-            type: "restaurant",
-          },
-          (results, status) => {
-            if (searchId !== activeRestaurantSearchIdRef.current) {
-              resolve([]);
-              return;
-            }
-
-            if (status === placesLib.PlacesServiceStatus.OK && results) {
-              resolve(results);
-              return;
-            }
-
-            if (status === placesLib.PlacesServiceStatus.ZERO_RESULTS) {
-              resolve([]);
-              return;
-            }
-
-            const isTransientStatus =
-              status === placesLib.PlacesServiceStatus.OVER_QUERY_LIMIT ||
-              status === placesLib.PlacesServiceStatus.UNKNOWN_ERROR;
-
-            if (isTransientStatus && attempt < maxPlacesRetries) {
-              const delayMs = placesRetryDelayMs * (attempt + 1);
-              window.setTimeout(() => {
-                fetchNearbySearch(point, attempt + 1).then(resolve);
-              }, delayMs);
-              return;
-            }
-
-            resolve([]);
-          },
-        );
+    try {
+      const response = await fetch("/api/places/nearby", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          points: searchPoints,
+          radius: apiSearchRadius,
+        }),
       });
-    };
 
-    const runSearchesWithConcurrency = async () => {
-      const workerCount = Math.min(maxPlacesConcurrency, searchPoints.length);
-      let nextIndex = 0;
+      if (searchId !== activeRestaurantSearchIdRef.current) {
+        return;
+      }
 
-      const worker = async () => {
-        while (nextIndex < searchPoints.length) {
-          const currentIndex = nextIndex;
-          nextIndex += 1;
-
-          const point = searchPoints[currentIndex];
-          const results = await fetchNearbySearch(point);
-
-          if (searchId !== activeRestaurantSearchIdRef.current) {
-            return;
-          }
-
-          results.forEach((place) => {
-            if (place.place_id) {
-              allPlaces[place.place_id] = place;
-            }
-          });
-        }
-      };
-
-      await Promise.all(Array.from({ length: workerCount }, () => worker()));
-    };
-
-    runSearchesWithConcurrency()
-      .then(() => {
-        if (searchId !== activeRestaurantSearchIdRef.current) {
-          return;
-        }
-        processAllResults(
-          Object.values(allPlaces),
-          polylineCoordinates,
-          filterDistance,
-          routeIndex,
-          searchId,
-          finishRestaurantSearch,
-        );
-      })
-      .catch(() => {
-        if (searchId !== activeRestaurantSearchIdRef.current) {
-          return;
-        }
+      if (!response.ok) {
+        setRouteError(await parseApiError(response));
         finishRestaurantSearch(searchId);
-      });
+        return;
+      }
+
+      const data = (await response.json()) as { places: PlaceSearchResult[] };
+      processAllResults(
+        data.places,
+        polylineCoordinates,
+        filterDistance,
+        routeIndex,
+        searchId,
+        finishRestaurantSearch,
+      );
+    } catch (error) {
+      if (searchId !== activeRestaurantSearchIdRef.current) {
+        return;
+      }
+      console.error("Error fetching restaurants:", error);
+      setRouteError("Failed to fetch restaurants. Please try again.");
+      finishRestaurantSearch(searchId);
+    }
   };
 
   const processAllResults = (
-    results: google.maps.places.PlaceResult[],
+    results: PlaceSearchResult[],
     polylineCoordinates: google.maps.LatLngLiteral[],
     filterDistance: number,
     routeIndex: number,
@@ -572,12 +513,12 @@ function MapContent() {
           return null;
         }
 
-        if (!place.geometry || !place.geometry.location) {
+        if (!place.geometry?.location) {
           return null;
         }
 
-        const lat = place.geometry.location.lat();
-        const lng = place.geometry.location.lng();
+        const lat = place.geometry.location.lat;
+        const lng = place.geometry.location.lng;
 
         if (
           typeof lat !== "number" ||
@@ -637,7 +578,7 @@ function MapContent() {
 
     setDestinationLabel(selectedPrediction.description);
 
-    if (userLocation && routeLib) {
+    if (userLocation) {
       setOriginLabel("Current Location");
       handleGetDirection(userLocation, {
         placeId: selectedPrediction.place_id,
@@ -650,7 +591,7 @@ function MapContent() {
       setViewState("results");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPrediction, userLocation, routeLib, locationError]);
+  }, [selectedPrediction, userLocation, locationError]);
 
   return (
     <div className="h-screen w-screen flex flex-col bg-app-bg relative overflow-hidden">
@@ -708,6 +649,11 @@ function MapContent() {
                     {locationError}
                   </span>
                 )}
+                {routeError && (
+                  <span className="text-amber-300 text-sm text-center mt-2">
+                    {routeError}
+                  </span>
+                )}
               </div>
             </motion.div>
           </motion.div>
@@ -729,44 +675,33 @@ function MapContent() {
             className="absolute top-20 left-4 right-4 z-20 lg:top-20 lg:left-8 lg:right-auto lg:w-md lg:max-w-[90vw] flex flex-col gap-3 lg:max-h-[calc(100vh-6rem)]"
           >
           <motion.div layoutId="search-bar">
-              {isSearchExpanded || !originLabel || !destinationLabel ? (
-                <RouteSearch
-                  onSearch={(o, d, oLabel, dLabel) => {
-                    setOriginLabel(oLabel);
-                    setDestinationLabel(dLabel);
-                    handleGetDirection(o, d);
-                    setIsSearchExpanded(false);
-                  }}
-                  isLoading={!routeLib}
-                  defaultOrigin={originLabel}
-                  defaultDestination={destinationLabel}
-                  userLocation={userLocation}
-                />
-              ) : (
-                <button
-                  onClick={() => setIsSearchExpanded(true)}
-                  className="w-full flex items-center gap-2 bg-card-bg border border-border rounded-lg px-3 py-2.5 shadow-lg hover:border-primary/50 transition-colors text-left"
-                  aria-label="Edit search"
-                >
-                  <svg className="w-4 h-4 text-text-muted shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                  <span className="text-text-primary text-sm flex-1 flex items-center gap-0 min-w-0">
-                    <span className="text-text-muted truncate min-w-0 max-w-[40%]">{originLabel || "Origin"}</span>
-                    <span className="text-text-muted mx-1.5 shrink-0">→</span>
-                    <span className="truncate min-w-0 max-w-[40%]">{destinationLabel || "Destination"}</span>
-                  </span>
-                  <svg className="w-3.5 h-3.5 text-text-muted shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2.414a2 2 0 01.586-1.414z" />
-                  </svg>
-                </button>
-              )}
+              <RouteSearch
+                collapsed={
+                  !isSearchExpanded &&
+                  Boolean(originLabel && destinationLabel)
+                }
+                onExpand={() => setIsSearchExpanded(true)}
+                onSearch={(o, d, oLabel, dLabel) => {
+                  setOriginLabel(oLabel);
+                  setDestinationLabel(dLabel);
+                  void handleGetDirection(o, d);
+                  setIsSearchExpanded(false);
+                }}
+                isLoading={isFetchingDirections}
+                searchDisabled={
+                  !canSearch || isFetchingDirections || isSearchingRestaurants
+                }
+                searchBlockedMessage={
+                  routeError && !dailyLimitReached ? routeError : null
+                }
+                defaultOrigin={originLabel}
+                defaultDestination={destinationLabel}
+                userLocation={userLocation}
+                searchCount={searchCount}
+                dailyLimit={dailyLimit}
+                dailyLimitReached={dailyLimitReached}
+              />
             </motion.div>
-            {routeLimitError && (
-              <p className="text-amber-300 text-xs sm:text-sm px-1">
-                {routeLimitError}
-              </p>
-            )}
             {routes.length > 0 && (
               <div className="hidden lg:block flex-1 min-h-0">
                 <RouteSelectionPanel

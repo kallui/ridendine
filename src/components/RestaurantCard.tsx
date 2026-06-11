@@ -13,7 +13,7 @@ export default function RestaurantCard({
   return (
     <div
       onClick={() => onClick(restaurant)}
-      className="bg-card-bg border border-border rounded-lg px-3 py-2.5 hover:border-primary/60 hover:shadow-md hover:shadow-primary/10 transition-all cursor-pointer"
+      className="bg-card-bg border border-border rounded-lg px-3 py-2.5 hover:border-text-muted hover:shadow-md transition-all cursor-pointer"
     >
       {/* Row 1: Name + Maps link */}
       <div className="flex items-start justify-between gap-2 mb-1">
@@ -25,7 +25,7 @@ export default function RestaurantCard({
           target="_blank"
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}
-          className="shrink-0 p-1 text-text-muted hover:text-primary transition-colors"
+          className="shrink-0 p-1 text-text-muted hover:text-text-primary transition-colors"
           aria-label="View on Google Maps"
         >
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

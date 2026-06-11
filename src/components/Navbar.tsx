@@ -9,14 +9,14 @@ export default function Navbar({ themeMode, onToggleTheme }: NavbarProps) {
       <div className="flex items-center justify-between">
         <a
           href="/"
-          className="text-xl sm:text-2xl font-bold text-primary hover:text-primary-hover transition-colors"
+          className="text-xl sm:text-2xl font-bold text-brand hover:text-brand-hover transition-colors"
         >
           Ride&apos;N&apos;Dine
         </a>
         <button
           type="button"
           onClick={onToggleTheme}
-          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border text-text-secondary hover:text-text-primary hover:border-primary/50 transition-colors"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border text-text-secondary hover:text-text-primary hover:border-text-muted transition-colors"
           aria-label="Toggle theme"
           title={
             themeMode === "dark"

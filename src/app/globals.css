@@ -2,83 +2,87 @@
 
 /* ===================================
    App Color System
+   Neutral UI · indigo reserved for brand
    =================================== */
 :root {
-  /* Light mode default: neutral with lighter indigo accents */
-  --background: #f2f5ff;
-  --foreground: #1b2239;
-  --app-bg: #f2f5ff;
-  --card-bg: #f4f7ff;
-  --primary: #7c8cff;
-  --primary-hover: #6c7df4;
-  --accent-indigo: #90a0ff;
-  --accent-indigo-ring: #a8b5ff;
-  --accent-indigo-soft: #eaf0ff;
-  --border: #d7def8;
-  --text-primary: #1b2239;
-  --text-secondary: #4f5f86;
-  --text-muted: #7480a3;
+  /* Light — zinc gray (shadcn / Linear-style, not stark white) */
+  --app-bg: #f4f4f5;
+  --card-bg: #fafafa;
+  --border: #d4d4d8;
+  --text-primary: #18181b;
+  --text-secondary: #52525b;
+  --text-muted: #71717a;
+  --primary: #18181b;
+  --primary-hover: #27272a;
+  --primary-fg: #fafafa;
+  --brand: #6366f1;
+  --brand-hover: #4f46e5;
+  --accent: #e4e4e7;
+  --accent-ring: #a1a1aa;
+  --accent-soft: #ececee;
 }
 
 :root[data-theme="dark"] {
-  --background: #0e1324;
-  --foreground: #e9eeff;
-  --app-bg: #0e1324;
-  --card-bg: #171d33;
-  --primary: #8d9cff;
-  --primary-hover: #7c8cff;
-  --accent-indigo: #9ba8ff;
-  --accent-indigo-ring: #b7c2ff;
-  --accent-indigo-soft: #2a3257;
-  --border: #303a64;
-  --text-primary: #e9eeff;
-  --text-secondary: #a8b3d6;
-  --text-muted: #8690b6;
+  --app-bg: #09090b;
+  --card-bg: #18181b;
+  --border: #27272a;
+  --text-primary: #fafafa;
+  --text-secondary: #a1a1aa;
+  --text-muted: #71717a;
+  --primary: #fafafa;
+  --primary-hover: #e4e4e7;
+  --primary-fg: #18181b;
+  --brand: #818cf8;
+  --brand-hover: #6366f1;
+  --accent: #3f3f46;
+  --accent-ring: #52525b;
+  --accent-soft: #27272a;
 }
 
 @theme inline {
-  /* Make colors available as Tailwind utilities */
   --color-app-bg: var(--app-bg);
   --color-card-bg: var(--card-bg);
   --color-primary: var(--primary);
   --color-primary-hover: var(--primary-hover);
-  --color-accent: var(--accent-indigo);
-  --color-accent-ring: var(--accent-indigo-ring);
-  --color-accent-soft: var(--accent-indigo-soft);
+  --color-primary-fg: var(--primary-fg);
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-accent: var(--accent);
+  --color-accent-ring: var(--accent-ring);
+  --color-accent-soft: var(--accent-soft);
   --color-border: var(--border);
   --color-text-primary: var(--text-primary);
   --color-text-secondary: var(--text-secondary);
   --color-text-muted: var(--text-muted);
 
-  /* Keep font families */
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
-    --background: #0e1324;
-    --foreground: #e9eeff;
-    --app-bg: #0e1324;
-    --card-bg: #171d33;
-    --primary: #8d9cff;
-    --primary-hover: #7c8cff;
-    --accent-indigo: #9ba8ff;
-    --accent-indigo-ring: #b7c2ff;
-    --accent-indigo-soft: #2a3257;
-    --border: #303a64;
-    --text-primary: #e9eeff;
-    --text-secondary: #a8b3d6;
-    --text-muted: #8690b6;
+    --app-bg: #09090b;
+    --card-bg: #18181b;
+    --border: #27272a;
+    --text-primary: #fafafa;
+    --text-secondary: #a1a1aa;
+    --text-muted: #71717a;
+    --primary: #fafafa;
+    --primary-hover: #e4e4e7;
+    --primary-fg: #18181b;
+    --brand: #818cf8;
+    --brand-hover: #6366f1;
+    --accent: #3f3f46;
+    --accent-ring: #52525b;
+    --accent-soft: #27272a;
   }
 }
 
-/* Remove default margins and prevent scrollbars */
 html,
 body {
   margin: 0;
   padding: 0;
-  overflow: hidden; /* Prevent page-level scrolling */
+  overflow: hidden;
   height: 100%;
   width: 100%;
 }
@@ -89,9 +93,6 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
-/* ===================================
-   Custom Scrollbar (dark minimalist)
-   =================================== */
 ::-webkit-scrollbar {
   width: 4px;
 }
@@ -109,7 +110,6 @@ body {
   background: var(--text-muted);
 }
 
-/* Google Maps InfoWindow Dark Theme */
 .gm-style .gm-style-iw-c {
   background-color: var(--card-bg) !important;
   color: var(--text-primary) !important;
@@ -127,7 +127,6 @@ body {
   box-shadow: -2px 2px 2px 0 rgba(0, 0, 0, 0.3) !important;
 }
 
-/* Close button styling */
 .gm-style .gm-ui-hover-effect {
   opacity: 1 !important;
 }
@@ -136,7 +135,6 @@ body {
   background-color: var(--text-secondary) !important;
 }
 
-/* Google Places Autocomplete Styling */
 .pac-container {
   background-color: var(--card-bg);
   border-radius: 8px;
@@ -162,18 +160,18 @@ body {
 }
 
 .pac-item:hover {
-  background-color: var(--accent-indigo-soft);
+  background-color: var(--accent-soft);
 }
 
 .pac-item-selected {
-  background-color: var(--accent-indigo-soft) !important;
+  background-color: var(--accent-soft) !important;
 }
 
 .pac-matched {
   font-weight: 600;
-  color: var(--primary);
+  color: var(--text-primary);
 }
 
 .pac-icon {
-  display: none; /* Hide the default pin icon */
+  display: none;
 }

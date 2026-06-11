@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useMapsLibrary } from "@vis.gl/react-google-maps";
+import { AUTOCOMPLETE_DEBOUNCE_MS } from "@/lib/client/search-guards";
 
 // Metro Vancouver fallback bounds
 const VANCOUVER_BIAS: google.maps.LatLngBoundsLiteral = {
@@ -20,6 +21,7 @@ export function useCustomPlacesAutocomplete(options?: {
 }) {
   const [initialInput] = useState(options?.initialInput ?? "");
   const [input, setInput] = useState(options?.initialInput ?? "");
+  const [debouncedInput, setDebouncedInput] = useState(options?.initialInput ?? "");
   const [predictions, setPredictions] = useState<AutocompletePrediction[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
@@ -27,7 +29,17 @@ export function useCustomPlacesAutocomplete(options?: {
     useState<AutocompletePrediction | null>(null);
   const placesLib = useMapsLibrary("places");
   const shouldFetchPredictions =
-    !!input && !!placesLib && !(initialInput && input === initialInput);
+    !!debouncedInput &&
+    !!placesLib &&
+    !(initialInput && debouncedInput === initialInput);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedInput(input);
+    }, AUTOCOMPLETE_DEBOUNCE_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [input]);
   const sessionTokenRef =
     useRef<google.maps.places.AutocompleteSessionToken | null>(null);
 
@@ -55,7 +67,7 @@ export function useCustomPlacesAutocomplete(options?: {
     });
 
     google.maps.places.AutocompleteSuggestion.fetchAutocompleteSuggestions({
-      input,
+      input: debouncedInput,
       sessionToken: sessionTokenRef.current ?? undefined,
       locationBias: locationBias,
     })
@@ -81,7 +93,7 @@ export function useCustomPlacesAutocomplete(options?: {
     return () => {
       cancelled = true;
     };
-  }, [input, placesLib, shouldFetchPredictions]);
+  }, [debouncedInput, placesLib, shouldFetchPredictions]);
 
   // Rotate session token after each selection (correct billing grouping)
   const setSelectedPrediction = useCallback(

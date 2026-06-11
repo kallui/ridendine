@@ -105,8 +105,8 @@ export default function RestaurantSidebar({
                   }
                   className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
                     minRating === opt.value
-                      ? "bg-primary text-white"
-                      : "bg-app-bg text-text-muted border border-border hover:border-primary/50 hover:text-text-secondary"
+                      ? "bg-primary text-primary-fg"
+                      : "bg-app-bg text-text-muted border border-border hover:border-text-muted hover:text-text-secondary"
                   }`}
                 >
                   {opt.label}
@@ -121,8 +121,8 @@ export default function RestaurantSidebar({
                   onClick={() => setSortBy(sortBy === opt ? "best" : opt)}
                   className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
                     sortBy === opt
-                      ? "bg-primary text-white"
-                      : "bg-app-bg text-text-muted border border-border hover:border-primary/50 hover:text-text-secondary"
+                      ? "bg-primary text-primary-fg"
+                      : "bg-app-bg text-text-muted border border-border hover:border-text-muted hover:text-text-secondary"
                   }`}
                 >
                   {opt === "distance" ? "Nearest" : "Top rated"}
@@ -216,8 +216,8 @@ export default function RestaurantSidebar({
                       }
                       className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
                         minRating === opt.value
-                          ? "bg-primary text-white"
-                          : "bg-app-bg text-text-muted border border-border hover:border-primary/50 hover:text-text-secondary"
+                          ? "bg-primary text-primary-fg"
+                          : "bg-app-bg text-text-muted border border-border hover:border-text-muted hover:text-text-secondary"
                       }`}
                     >
                       {opt.label}
@@ -234,8 +234,8 @@ export default function RestaurantSidebar({
                       onClick={() => setSortBy(sortBy === opt ? "best" : opt)}
                       className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
                         sortBy === opt
-                          ? "bg-primary text-white"
-                          : "bg-app-bg text-text-muted border border-border hover:border-primary/50 hover:text-text-secondary"
+                          ? "bg-primary text-primary-fg"
+                          : "bg-app-bg text-text-muted border border-border hover:border-text-muted hover:text-text-secondary"
                       }`}
                     >
                       {opt === "distance" ? "Nearest" : "Top rated"}

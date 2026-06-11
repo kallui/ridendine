@@ -8,6 +8,7 @@ import {
 } from "@vis.gl/react-google-maps";
 import { useEffect, useRef } from "react";
 import { Restaurant, SearchCircle } from "@/app/page";
+import { getRouteBoundsPoints, buildRoutePath, getRouteEndpoints } from "@/lib/directions-paths";
 import RestaurantMarkerPopup from "./RestaurantMarkerPopup";
 
 interface MapProps {
@@ -23,7 +24,7 @@ interface MapProps {
   showBounds: boolean;
   selectedRestaurant: Restaurant | null;
   onSelectRestaurant: (restaurant: Restaurant | null) => void;
-  onMapClick?: () => void; // called when the map background is tapped (not a marker)
+  onMapClick?: () => void;
 }
 
 export default function Map({
@@ -31,7 +32,6 @@ export default function Map({
   zoomLevel,
   mapId,
   colorScheme,
-  directionsResult,
   routes,
   selectedRouteIndex,
   restaurants,
@@ -42,59 +42,45 @@ export default function Map({
   onMapClick,
 }: MapProps) {
   const map = useMap();
-  const directionsRenderersRef = useRef<google.maps.DirectionsRenderer[]>([]);
+  const polylinesRef = useRef<google.maps.Polyline[]>([]);
   const circlesRef = useRef<google.maps.Circle[]>([]);
 
-  // Pan + zoom to restaurant when selected from sidebar
   useEffect(() => {
     if (!map || !selectedRestaurant) return;
     map.panTo(selectedRestaurant.location);
     map.setZoom(17);
   }, [map, selectedRestaurant]);
 
-  // Handle route directions rendering (show all routes, highlight selected)
+  // Draw route polylines directly (REST directions JSON does not render via DirectionsRenderer).
   useEffect(() => {
-    if (!map || !directionsResult) return;
+    if (!map) return;
 
-    // Clear existing renderers
-    directionsRenderersRef.current.forEach((renderer) => renderer.setMap(null));
-    directionsRenderersRef.current = [];
+    polylinesRef.current.forEach((polyline) => polyline.setMap(null));
+    polylinesRef.current = [];
 
-    // Render all routes
     routes.forEach((route, index) => {
+      const path = buildRoutePath(route);
+      if (path.length === 0) return;
+
       const isSelected = selectedRouteIndex === index;
-
-      // Create a temporary DirectionsResult with just this route
-      const singleRouteResult: google.maps.DirectionsResult = {
-        ...directionsResult,
-        routes: [route],
-      };
-
-      const renderer = new google.maps.DirectionsRenderer({
-        suppressMarkers: isSelected, // Hide markers for non-selected routes
-        suppressInfoWindows: true,
-        preserveViewport: true,
-        polylineOptions: {
-          strokeColor: isSelected ? "#6366F1" : "#6B7280", // Primary indigo vs gray
-          strokeWeight: isSelected ? 5 : 3,
-          strokeOpacity: isSelected ? 0.8 : 0.4,
-        },
+      const polyline = new google.maps.Polyline({
+        path,
+        geodesic: true,
+        strokeColor: isSelected ? "#FAFAFA" : "#52525B",
+        strokeWeight: isSelected ? 6 : 4,
+        strokeOpacity: isSelected ? 1 : 0.45,
+        zIndex: isSelected ? 2 : 1,
+        map,
       });
-
-      renderer.setMap(map);
-      renderer.setDirections(singleRouteResult);
-      directionsRenderersRef.current.push(renderer);
+      polylinesRef.current.push(polyline);
     });
 
     return () => {
-      directionsRenderersRef.current.forEach((renderer) =>
-        renderer.setMap(null),
-      );
-      directionsRenderersRef.current = [];
+      polylinesRef.current.forEach((polyline) => polyline.setMap(null));
+      polylinesRef.current = [];
     };
-  }, [map, directionsResult, routes, selectedRouteIndex]);
+  }, [map, routes, selectedRouteIndex]);
 
-  // Fit map to the current route context whenever routes change.
   useEffect(() => {
     if (!map || routes.length === 0 || selectedRestaurant) return;
 
@@ -107,22 +93,9 @@ export default function Map({
     let hasPoints = false;
 
     routesToFit.forEach((route) => {
-      if (route.overview_path && route.overview_path.length > 0) {
-        route.overview_path.forEach((point) => {
-          bounds.extend(point);
-          hasPoints = true;
-        });
-        return;
-      }
-
-      route.legs.forEach((leg) => {
-        leg.steps.forEach((step) => {
-          if (!step.path || step.path.length === 0) return;
-          step.path.forEach((point) => {
-            bounds.extend(point);
-            hasPoints = true;
-          });
-        });
+      getRouteBoundsPoints(route).forEach((point) => {
+        bounds.extend(point);
+        hasPoints = true;
       });
     });
 
@@ -132,8 +105,6 @@ export default function Map({
       typeof window !== "undefined" &&
       window.matchMedia("(min-width: 1024px)").matches;
 
-    // Keep route comfortably visible around overlays. For an explicitly selected
-    // route, use tighter padding so the map feels more zoomed in.
     const fitPadding: google.maps.Padding =
       selectedRouteIndex !== null
         ? isDesktop
@@ -146,25 +117,22 @@ export default function Map({
     map.fitBounds(bounds, fitPadding);
   }, [map, routes, selectedRouteIndex]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Handle search circles visualization
   useEffect(() => {
     if (!map) return;
 
-    // Remove existing circles
     circlesRef.current.forEach((circle) => circle.setMap(null));
     circlesRef.current = [];
 
-    // Draw new circles if searchCircles exist and showBounds is true
     if (showBounds && searchCircles.length > 0) {
       circlesRef.current = searchCircles.map((searchCircle) => {
         const circle = new google.maps.Circle({
           center: searchCircle.center,
           radius: searchCircle.radius,
-          strokeColor: "#818CF8", // Indigo for search circles
-          strokeOpacity: 0.6,
+          strokeColor: "#71717A",
+          strokeOpacity: 0.5,
           strokeWeight: 2,
-          fillColor: "#6366F1",
-          fillOpacity: 0.1,
+          fillColor: "#52525B",
+          fillOpacity: 0.08,
           map: map,
         });
         if (onMapClick) circle.addListener("click", onMapClick);
@@ -172,12 +140,17 @@ export default function Map({
       });
     }
 
-    // Cleanup
     return () => {
       circlesRef.current.forEach((circle) => circle.setMap(null));
       circlesRef.current = [];
     };
   }, [map, searchCircles, showBounds, onMapClick]);
+
+  const markerRoute =
+    selectedRouteIndex !== null && routes[selectedRouteIndex]
+      ? routes[selectedRouteIndex]
+      : routes[0];
+  const routeEndpoints = markerRoute ? getRouteEndpoints(markerRoute) : null;
 
   return (
     <GoogleMap
@@ -190,7 +163,18 @@ export default function Map({
       colorScheme={colorScheme}
       onClick={onMapClick}
     >
-      {/* Restaurant Markers */}
+      {routeEndpoints?.origin && (
+        <AdvancedMarker position={routeEndpoints.origin} zIndex={3}>
+          <div className="w-3.5 h-3.5 rounded-full border-[2.5px] border-text-secondary bg-white shadow-md" />
+        </AdvancedMarker>
+      )}
+
+      {routeEndpoints?.destination && (
+        <AdvancedMarker position={routeEndpoints.destination} zIndex={3}>
+          <div className="w-4 h-4 rotate-45 rounded-sm bg-text-primary shadow-md ring-2 ring-white/80" />
+        </AdvancedMarker>
+      )}
+
       {restaurants.map((restaurant) => (
         <AdvancedMarker
           key={restaurant.placeId}
@@ -205,7 +189,6 @@ export default function Map({
         </AdvancedMarker>
       ))}
 
-      {/* Custom Info Window for Selected Restaurant */}
       {selectedRestaurant && (
         <RestaurantMarkerPopup
           restaurant={selectedRestaurant}

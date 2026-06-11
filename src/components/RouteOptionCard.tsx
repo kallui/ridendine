@@ -1,3 +1,5 @@
+import { getStepTransit, isTransitStep } from "@/lib/directions-normalize";
+
 interface RouteOptionCardProps {
   route: google.maps.DirectionsRoute;
   routeIndex: number;
@@ -23,13 +25,11 @@ export function getVehicleIcon(type: string): string {
 
 export function getRouteHeadline(route: google.maps.DirectionsRoute): string {
   const leg = route.legs[0];
-  const transitSteps = leg.steps.filter(
-    (step) => step.travel_mode === google.maps.TravelMode.TRANSIT,
-  );
+  const transitSteps = leg.steps.filter(isTransitStep);
   if (transitSteps.length === 0) return "🚶 Walk";
   return transitSteps
     .map((step) => {
-      const line = step.transit?.line;
+      const line = getStepTransit(step)?.line;
       const icon = getVehicleIcon(line?.vehicle?.type || "");
       const name = line?.short_name || line?.name || "";
       return name ? `${icon} ${name}` : null;
@@ -48,9 +48,7 @@ export default function RouteOptionCard({
   const leg = route.legs[0];
   const duration = leg.duration?.text || "N/A";
 
-  const transitSteps = leg.steps.filter(
-    (step) => step.travel_mode === google.maps.TravelMode.TRANSIT,
-  );
+  const transitSteps = leg.steps.filter(isTransitStep);
   const transfers = Math.max(0, transitSteps.length - 1);
 
   // Use the exported utility
@@ -61,12 +59,12 @@ export default function RouteOptionCard({
       onClick={() => onSelect(routeIndex)}
       className={`relative w-full text-left px-4 py-3 rounded-lg border transition-colors ${
         isSelected
-          ? "border-primary bg-primary/10"
-          : "border-border bg-card-bg hover:border-primary/40"
+          ? "border-text-muted bg-accent-soft"
+          : "border-border bg-card-bg hover:border-text-muted"
       }`}
     >
       {isSelected && (
-        <span className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-primary" />
+        <span className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-text-primary" />
       )}
       <div className="flex items-center justify-between gap-3">
         <div className="flex-1 min-w-0">
@@ -75,12 +73,12 @@ export default function RouteOptionCard({
               {routeHeadline}
             </div>
             {isRecommended && !isSelected && (
-              <span className="shrink-0 inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+              <span className="shrink-0 inline-flex items-center rounded-full border border-border bg-accent-soft px-2 py-0.5 text-[10px] font-medium text-text-secondary">
                 Best
               </span>
             )}
             {isSelected && (
-              <span className="shrink-0 inline-flex items-center rounded-full border border-primary/30 bg-primary/15 px-2 py-0.5 text-[10px] font-medium text-primary">
+              <span className="shrink-0 inline-flex items-center rounded-full border border-border bg-accent px-2 py-0.5 text-[10px] font-medium text-text-primary">
                 Selected
               </span>
             )}
