@@ -13,6 +13,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useCustomPlacesAutocomplete } from "@/hooks/useCustomPlacesAutocomplete";
 import { ThemedAutocompleteInput } from "@/components/ThemedAutocompleteInput";
 import {
+  formatCommuteLimitMessage,
+  isRouteWithinCommuteLimits,
+} from "@/lib/rate-limit-config";
+import {
   parseApiError,
   useRouteSearchGuards,
 } from "@/lib/client/search-guards";
@@ -75,8 +79,6 @@ function MapContent() {
   const turfFilterDistance = 750; // Turf.js filter: keep restaurants within this distance from route (meters)
   const apiSearchRadius = 1300; // API search radius: cast wider net, then filter with Turf.js (meters)
   const searchInterval = 2.5; // Sample points along route every X km for API searches
-  const maxCommuteMinutes = 90; // Guardrail: avoid very long trips that can trigger many downstream API calls
-  const maxRouteDistanceKm = 45;
   const minRestaurantLoadingMs = 450;
 
   // === MAP/ROUTE STATE ===
@@ -300,16 +302,6 @@ function MapContent() {
         return;
       }
 
-      const isRouteWithinLimit = (route: google.maps.DirectionsRoute) => {
-        const leg = route.legs[0];
-        const durationMinutes = (leg.duration?.value ?? Infinity) / 60;
-        const distanceKm = (leg.distance?.value ?? Infinity) / 1000;
-        return (
-          durationMinutes <= maxCommuteMinutes &&
-          distanceKm <= maxRouteDistanceKm
-        );
-      };
-
       const seen = new Set<string>();
       const uniqueRoutes = data.routes.filter((route) => {
         const headline = getRouteHeadline(route);
@@ -319,7 +311,7 @@ function MapContent() {
         return true;
       });
 
-      const limitedRoutes = uniqueRoutes.filter(isRouteWithinLimit);
+      const limitedRoutes = uniqueRoutes.filter(isRouteWithinCommuteLimits);
 
       if (limitedRoutes.length === 0) {
         setDirectionsResult(null);
@@ -329,9 +321,7 @@ function MapContent() {
         setRestaurantCache({});
         setSearchCircleCache({});
         setViewState("results");
-        setRouteError(
-          `Trips longer than ${maxCommuteMinutes} min or ${maxRouteDistanceKm} km are not supported. Try a closer destination.`,
-        );
+        setRouteError(formatCommuteLimitMessage());
         return;
       }
 

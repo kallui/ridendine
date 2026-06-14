@@ -1,11 +1,6 @@
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
-import {
-  DAILY_RESTAURANT_FETCH_LIMIT,
-  DAILY_ROUTE_SEARCH_LIMIT,
-  getDailyLimit,
-  type RateLimitAction,
-} from "@/lib/rate-limit-config";
+import { DAILY_ROUTE_SEARCH_LIMIT } from "@/lib/rate-limit-config";
 
 export type RateLimitResult = {
   success: boolean;
@@ -43,7 +38,6 @@ function checkMemoryLimit(
 // ─── Upstash (production multi-instance) ─────────────────────────────────────
 
 let routeDayLimiter: Ratelimit | null = null;
-let restaurantDayLimiter: Ratelimit | null = null;
 
 function upstashConfigured(): boolean {
   return Boolean(
@@ -63,17 +57,6 @@ function getRouteDayLimiter() {
   return routeDayLimiter;
 }
 
-function getRestaurantDayLimiter() {
-  if (!restaurantDayLimiter) {
-    restaurantDayLimiter = new Ratelimit({
-      redis: Redis.fromEnv(),
-      limiter: Ratelimit.slidingWindow(DAILY_RESTAURANT_FETCH_LIMIT, "1 d"),
-      prefix: "ridendine:restaurant",
-    });
-  }
-  return restaurantDayLimiter;
-}
-
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /** One user route search → one Directions API call. */
@@ -91,37 +74,15 @@ export async function checkRouteSearchLimit(
   );
 }
 
-/**
- * One route selection (first time) → batch of Nearby Search calls.
- * Cache hits skip this entirely.
- */
-export async function checkRestaurantFetchLimit(
-  identifier: string,
-): Promise<RateLimitResult> {
-  if (upstashConfigured()) {
-    const r = await getRestaurantDayLimiter().limit(identifier);
-    return { success: r.success, limit: r.limit, remaining: r.remaining, reset: r.reset };
-  }
-  return checkMemoryLimit(
-    `${identifier}:restaurant:day`,
-    DAILY_RESTAURANT_FETCH_LIMIT,
-    24 * 60 * 60 * 1000,
-  );
-}
-
-export function rateLimitResponse(
-  result: RateLimitResult,
-  action: RateLimitAction,
-) {
+export function rateLimitResponse(result: RateLimitResult) {
   const retryAfterSec = Math.max(1, Math.ceil((result.reset - Date.now()) / 1000));
-  const limit = getDailyLimit(action);
 
   return Response.json(
     {
       error: "rate_limit_exceeded",
-      action,
-      limit,
-      message: `Daily limit reached (${limit}/${limit} searches today). Resets tomorrow.`,
+      action: "route_search",
+      limit: DAILY_ROUTE_SEARCH_LIMIT,
+      message: `Daily limit reached (${DAILY_ROUTE_SEARCH_LIMIT}/${DAILY_ROUTE_SEARCH_LIMIT} searches today). Resets tomorrow.`,
       retryAfter: retryAfterSec,
     },
     {

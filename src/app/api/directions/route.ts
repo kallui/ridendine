@@ -1,5 +1,9 @@
 import { fetchDirections } from "@/lib/server/google-maps";
 import {
+  formatCommuteLimitMessage,
+  isRouteWithinCommuteLimits,
+} from "@/lib/rate-limit-config";
+import {
   checkRouteSearchLimit,
   rateLimitResponse,
 } from "@/lib/server/rate-limit";
@@ -32,7 +36,7 @@ export async function POST(request: Request) {
   const rateLimit = await checkRouteSearchLimit(identifier);
 
   if (!rateLimit.success) {
-    return rateLimitResponse(rateLimit, "route_search");
+    return rateLimitResponse(rateLimit);
   }
 
   try {
@@ -49,9 +53,21 @@ export async function POST(request: Request) {
       );
     }
 
+    const routes = data.routes.filter(isRouteWithinCommuteLimits);
+
+    if (routes.length === 0) {
+      return Response.json(
+        {
+          error: "route_too_long",
+          message: formatCommuteLimitMessage(),
+        },
+        { status: 422 },
+      );
+    }
+
     return Response.json({
       status: data.status,
-      routes: data.routes,
+      routes,
       geocoded_waypoints: data.geocoded_waypoints,
       request: data.request,
     });

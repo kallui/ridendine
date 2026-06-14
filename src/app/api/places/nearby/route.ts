@@ -1,9 +1,4 @@
 import { fetchNearbyRestaurantsBatch } from "@/lib/server/google-maps";
-import {
-  checkRestaurantFetchLimit,
-  rateLimitResponse,
-} from "@/lib/server/rate-limit";
-import { getClientIp, getOrCreateSessionId } from "@/lib/server/session";
 
 type NearbyRequestBody = {
   points?: { lat: number; lng: number }[];
@@ -41,16 +36,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const sessionId = await getOrCreateSessionId();
-  const identifier = `${getClientIp(request)}:${sessionId}`;
-  const rateLimit = await checkRestaurantFetchLimit(identifier);
-
-  if (!rateLimit.success) {
-    return rateLimitResponse(rateLimit, "restaurant_fetch");
-  }
-
   try {
-    // One rate-limit token; server fans out to ~1 Nearby Search call per sample point.
     const places = await fetchNearbyRestaurantsBatch(body.points, radius);
     return Response.json({ places });
   } catch (error) {

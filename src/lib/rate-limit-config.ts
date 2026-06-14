@@ -1,17 +1,13 @@
 /**
- * Rate limits count **user actions**, not individual Google API calls.
+ * Limits & guardrails for user actions.
  *
- * One route search  →  1 Directions API call
- * One route selection (first time)  →  ~8–18 Nearby Search calls (batched)
- * Re-selecting a cached route  →  0 API calls
- * Autocomplete keystrokes  →  client-debounced only, not counted here
+ * Route search  →  1 Directions API call, capped per day (Upstash)
+ * Restaurant load  →  no separate limit; re-selecting a route uses cache
  */
 
 /** Max route searches per user per day. */
+// Testing: 2, production: 10
 export const DAILY_ROUTE_SEARCH_LIMIT = 10;
-
-/** Max restaurant fetches per user per day. */
-export const DAILY_RESTAURANT_FETCH_LIMIT = 50;
 
 /** Minimum ms between route searches (prevents accidental double-submit). */
 export const ROUTE_SEARCH_COOLDOWN_MS = 8_000;
@@ -19,12 +15,29 @@ export const ROUTE_SEARCH_COOLDOWN_MS = 8_000;
 /** Autocomplete debounce. */
 export const AUTOCOMPLETE_DEBOUNCE_MS = 400;
 
+/** Reject routes longer than this — keeps the app commute-focused. */
+export const MAX_COMMUTE_MINUTES = 60;
+
+/** Reject routes farther than this (straight-line trip distance from Google). */
+export const MAX_ROUTE_DISTANCE_KM = 35;
+
 export const SESSION_COOKIE_NAME = "rid_session";
 
-export type RateLimitAction = "route_search" | "restaurant_fetch";
+export function isRouteWithinCommuteLimits(
+  route: google.maps.DirectionsRoute,
+): boolean {
+  const leg = route.legs[0];
+  if (!leg) return false;
 
-export function getDailyLimit(action: RateLimitAction): number {
-  return action === "route_search"
-    ? DAILY_ROUTE_SEARCH_LIMIT
-    : DAILY_RESTAURANT_FETCH_LIMIT;
+  const durationMinutes = (leg.duration?.value ?? Infinity) / 60;
+  const distanceKm = (leg.distance?.value ?? Infinity) / 1000;
+
+  return (
+    durationMinutes <= MAX_COMMUTE_MINUTES &&
+    distanceKm <= MAX_ROUTE_DISTANCE_KM
+  );
+}
+
+export function formatCommuteLimitMessage(): string {
+  return `Trips longer than ${MAX_COMMUTE_MINUTES} min or ${MAX_ROUTE_DISTANCE_KM} km aren't supported. Try a closer destination.`;
 }
