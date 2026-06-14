@@ -11,8 +11,11 @@
   "dependencies": {
     "@googlemaps/code-assist-mcp": "^0.2.0",
     "@googlemaps/js-api-loader": "^2.0.2",
+    "@googlemaps/polyline-codec": "^1.0.28",
     "@turf/turf": "^7.2.0",
     "@types/next-pwa": "^5.6.9",
+    "@upstash/ratelimit": "^2.0.8",
+    "@upstash/redis": "^1.38.0",
     "@vis.gl/react-google-maps": "^1.7.1",
     "framer-motion": "^12.35.2",
     "maplibre-gl": "^5.10.0",

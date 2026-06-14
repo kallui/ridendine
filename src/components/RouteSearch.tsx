@@ -12,17 +12,31 @@ interface RouteSearchProps {
     destLabel: string,
   ) => void;
   isLoading?: boolean;
+  searchDisabled?: boolean;
+  searchBlockedMessage?: string | null;
   defaultOrigin?: string;
   defaultDestination?: string;
   userLocation?: google.maps.LatLngLiteral | null;
+  collapsed?: boolean;
+  onExpand?: () => void;
+  searchCount?: number;
+  dailyLimit?: number;
+  dailyLimitReached?: boolean;
 }
 
 export default function RouteSearch({
   onSearch,
   isLoading,
+  searchDisabled,
+  searchBlockedMessage,
   defaultOrigin,
   defaultDestination,
   userLocation,
+  collapsed = false,
+  onExpand,
+  searchCount = 0,
+  dailyLimit = 10,
+  dailyLimitReached = false,
 }: RouteSearchProps) {
   const skipNextAutoSearchRef = useRef(false);
   const originInputRef = useRef<HTMLInputElement>(null);
@@ -62,6 +76,7 @@ export default function RouteSearch({
       destInputRef.current?.focus();
       return;
     }
+    if (searchDisabled) return;
 
     onSearch(origin, destination, originAC.input, destAC.input);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -90,7 +105,7 @@ export default function RouteSearch({
       ? { placeId: nextDestinationPrediction.place_id }
       : nextDestinationInput;
 
-    if (nextOrigin && nextDestination) {
+    if (nextOrigin && nextDestination && !searchDisabled) {
       onSearch(nextOrigin, nextDestination, nextOriginInput, nextDestinationInput);
     }
   };
@@ -103,7 +118,7 @@ export default function RouteSearch({
     const d = destAC.selectedPrediction
       ? { placeId: destAC.selectedPrediction.place_id }
       : destAC.input;
-    if (o && d) onSearch(o, d, originAC.input, destAC.input);
+    if (o && d && !searchDisabled) onSearch(o, d, originAC.input, destAC.input);
   };
 
   const showOriginDropdown =
@@ -225,17 +240,38 @@ export default function RouteSearch({
   };
 
   return (
-    <form
-      className="bg-card-bg p-2.5 sm:p-4 rounded-lg shadow-lg flex flex-col gap-2 sm:gap-3 border border-border"
-      onSubmit={handleSubmit}
-    >
+    <div className="bg-card-bg rounded-lg shadow-lg flex flex-col border border-border">
+      {collapsed ? (
+        <button
+          type="button"
+          onClick={onExpand}
+          className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-accent-soft/40 transition-colors text-left rounded-t-lg"
+          aria-label="Edit search"
+        >
+          <svg className="w-4 h-4 text-text-muted shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <span className="text-text-primary text-sm flex-1 flex items-center gap-0 min-w-0">
+            <span className="text-text-muted truncate min-w-0 max-w-[40%]">{defaultOrigin || "Origin"}</span>
+            <span className="text-text-muted mx-1.5 shrink-0">→</span>
+            <span className="truncate min-w-0 max-w-[40%]">{defaultDestination || "Destination"}</span>
+          </span>
+          <svg className="w-3.5 h-3.5 text-text-muted shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2.414a2 2 0 01.586-1.414z" />
+          </svg>
+        </button>
+      ) : (
+        <form
+          className="p-2.5 sm:p-4 flex flex-col gap-2 sm:gap-3"
+          onSubmit={handleSubmit}
+        >
       {/* Origin + Destination with simplified route indicator */}
       <div className="flex gap-3">
         {/* Left: start/end indicator */}
         <div className="flex flex-col items-center py-3 shrink-0 w-4">
-          <div className="w-2.5 h-2.5 rounded-full border-2 border-primary shrink-0" />
+          <div className="w-2.5 h-2.5 rounded-full border-2 border-text-secondary shrink-0" />
           <div className="w-px flex-1 bg-border my-2" />
-          <div className="w-3 h-3 bg-primary rotate-45 rounded-sm shrink-0" />
+          <div className="w-3 h-3 bg-text-primary rotate-45 rounded-sm shrink-0" />
         </div>
 
         {/* Right: inputs + floating swap */}
@@ -289,8 +325,8 @@ export default function RouteSearch({
                         onMouseLeave={() => originAC.setActiveIndex(null)}
                         className={`px-4 py-2 text-sm cursor-pointer transition-colors ${
                           i === originAC.activeIndex
-                            ? "bg-primary/25 text-text-primary"
-                            : "text-text-secondary hover:bg-primary/10"
+                            ? "bg-accent-soft text-text-primary"
+                            : "text-text-secondary hover:bg-accent-soft/60"
                         }`}
                       >
                         {p.description}
@@ -350,8 +386,8 @@ export default function RouteSearch({
                         onMouseLeave={() => destAC.setActiveIndex(null)}
                         className={`px-4 py-2 text-sm cursor-pointer transition-colors ${
                           i === destAC.activeIndex
-                            ? "bg-primary/25 text-text-primary"
-                            : "text-text-secondary hover:bg-primary/10"
+                            ? "bg-accent-soft text-text-primary"
+                            : "text-text-secondary hover:bg-accent-soft/60"
                         }`}
                       >
                         {p.description}
@@ -368,7 +404,7 @@ export default function RouteSearch({
             onClick={handleSwap}
             title="Swap origin and destination"
             aria-label="Swap origin and destination"
-            className="absolute right-0 top-1/2 -translate-y-1/2 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-card-bg/90 text-text-muted hover:text-primary hover:border-primary/40 transition-colors"
+            className="absolute right-0 top-1/2 -translate-y-1/2 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-card-bg/90 text-text-muted hover:text-text-primary hover:border-text-muted transition-colors"
           >
             <svg
               className="h-4 w-4 rotate-90"
@@ -387,6 +423,42 @@ export default function RouteSearch({
           </button>
         </div>
       </div>
-    </form>
+      {searchBlockedMessage && (
+        <p className="text-amber-300 text-xs px-1">{searchBlockedMessage}</p>
+      )}
+      {isLoading && (
+        <p className="text-text-muted text-xs px-1">Loading maps...</p>
+      )}
+        </form>
+      )}
+
+      {searchCount > 0 && (
+        <div className="flex items-center gap-2.5 border-t border-border px-3 py-2">
+          <div className="flex gap-0.5 shrink-0">
+            {Array.from({ length: dailyLimit }).map((_, i) => (
+              <div
+                key={i}
+                className={`h-1.5 w-3 rounded-full transition-colors ${
+                  i < searchCount
+                    ? dailyLimitReached
+                      ? "bg-amber-400"
+                      : "bg-text-primary"
+                    : "bg-border"
+                }`}
+              />
+            ))}
+          </div>
+          <span
+            className={`text-xs font-medium ${
+              dailyLimitReached ? "text-amber-500" : "text-text-secondary"
+            }`}
+          >
+            {dailyLimitReached
+              ? "Daily limit reached · resets tomorrow"
+              : `${searchCount}/${dailyLimit} searches today`}
+          </span>
+        </div>
+      )}
+    </div>
   );
 }
