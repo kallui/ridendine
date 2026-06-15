@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 interface NavbarProps {
   themeMode: "light" | "dark";
   onToggleTheme: () => void;
@@ -7,12 +9,12 @@ export default function Navbar({ themeMode, onToggleTheme }: NavbarProps) {
   return (
     <nav className="fixed top-0 left-0 right-0 z-40 bg-card-bg/95 backdrop-blur-md text-text-primary px-6 py-3 shadow-lg border-b border-border">
       <div className="flex items-center justify-between">
-        <a
+        <Link
           href="/"
           className="text-xl sm:text-2xl font-bold text-brand hover:text-brand-hover transition-colors"
         >
           Ride&apos;N&apos;Dine
-        </a>
+        </Link>
         <button
           type="button"
           onClick={onToggleTheme}

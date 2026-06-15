@@ -6,7 +6,6 @@
  */
 
 /** Max route searches per user per day. */
-// Testing: 2, production: 10
 export const DAILY_ROUTE_SEARCH_LIMIT = 10;
 
 /** Minimum ms between route searches (prevents accidental double-submit). */

@@ -74,6 +74,11 @@ export async function checkRouteSearchLimit(
   );
 }
 
+/** Clears in-memory buckets — for tests only. */
+export function resetMemoryRateLimits() {
+  memoryBuckets.clear();
+}
+
 export function rateLimitResponse(result: RateLimitResult) {
   const retryAfterSec = Math.max(1, Math.ceil((result.reset - Date.now()) / 1000));
 
