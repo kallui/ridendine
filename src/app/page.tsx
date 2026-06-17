@@ -9,9 +9,6 @@ import BottomSheet from "@/components/BottomSheet";
 import { getRouteHeadline } from "@/components/RouteOptionCard";
 import { APIProvider } from "@vis.gl/react-google-maps";
 import { useState, useEffect, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { useCustomPlacesAutocomplete } from "@/hooks/useCustomPlacesAutocomplete";
-import { ThemedAutocompleteInput } from "@/components/ThemedAutocompleteInput";
 import {
   formatCommuteLimitMessage,
   isRouteWithinCommuteLimits,
@@ -20,8 +17,17 @@ import {
   parseApiError,
   useRouteSearchGuards,
 } from "@/lib/client/search-guards";
-import { normalizeDirectionsResult } from "@/lib/directions-normalize";
-import { extractPolylineCoordinates } from "@/lib/directions-paths";
+import {
+  normalizeDirectionsResult,
+  isTransitStep,
+  getStepTransit,
+} from "@/lib/directions-normalize";
+import {
+  extractPolylineCoordinates,
+  extractTransitPolyline,
+  getRouteEndpoints,
+} from "@/lib/directions-paths";
+import { isWithinMetroVancouver } from "@/lib/geo-bounds";
 import type { PlaceSearchResult } from "@/lib/places-types";
 import { computeSearchPoints } from "@/lib/route-sampling";
 import * as turf from "@turf/turf";
@@ -41,31 +47,18 @@ export type Restaurant = {
 export type SearchCircle = {
   center: google.maps.LatLngLiteral;
   radius: number;
+  name?: string;
 };
 
 type ThemeMode = "light" | "dark";
 
 function MapContent() {
   const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
-  // === HERO/RESULTS STATE ===
-  const [viewState, setViewState] = useState<"hero" | "results">("hero");
   const [originLabel, setOriginLabel] = useState("");
   const [destinationLabel, setDestinationLabel] = useState("");
-  // User's current location (declared first so it can be passed to the hook)
   const [userLocation, setUserLocation] =
     useState<google.maps.LatLngLiteral | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
-  // Destination autocomplete (hero view)
-  const {
-    input,
-    setInput,
-    predictions,
-    loading: autocompleteLoading,
-    activeIndex,
-    setActiveIndex,
-    selectedPrediction,
-    setSelectedPrediction,
-  } = useCustomPlacesAutocomplete({ userLocation });
   const [routeError, setRouteError] = useState<string | null>(null);
   const [isFetchingDirections, setIsFetchingDirections] = useState(false);
   const {
@@ -76,9 +69,9 @@ function MapContent() {
     recordSearch,
   } = useRouteSearchGuards();
   // === SEARCH CONFIGURATION ===
-  const turfFilterDistance = 750; // Turf.js filter: keep restaurants within this distance from route (meters)
-  const apiSearchRadius = 1300; // API search radius: cast wider net, then filter with Turf.js (meters)
-  const searchInterval = 2.5; // Sample points along route every X km for API searches
+  const turfFilterDistance = 400; // 5-min walk (~400 m) from nearest stop
+  const apiSearchRadius = 600; // API search radius: cast a modest net, then filter to turfFilterDistance
+  const fallbackSearchInterval = 0.5; // Fallback: sample transit polyline every X km when GTFS unavailable
   const minRestaurantLoadingMs = 450;
 
   // === MAP/ROUTE STATE ===
@@ -157,22 +150,13 @@ function MapContent() {
     }
   }, [userLocation]);
 
-  // Auto-switch to results view when a search is performed (POC: when routes appear)
+  // Collapse search form and open bottom sheet when new routes arrive.
   useEffect(() => {
-    if (routes.length > 0 && viewState === "hero") {
-      setViewState("results");
-    }
     if (routes.length > 0) {
-      setIsSearchExpanded(false); // collapse form when new results arrive
-    }
-  }, [routes.length, viewState]);
-
-  // Mobile: open sheet when routes arrive, then peek after a route is chosen.
-  useEffect(() => {
-    if (routes.length > 0 && viewState === "results") {
+      setIsSearchExpanded(false);
       setIsBottomSheetExpanded(true);
     }
-  }, [routes.length, viewState]);
+  }, [routes.length]);
 
   useEffect(() => {
     if (selectedRouteIndex !== null) {
@@ -285,7 +269,6 @@ function MapContent() {
 
       if (!response.ok) {
         setRouteError(await parseApiError(response));
-        setViewState("results");
         setIsSearchExpanded(true);
         return;
       }
@@ -320,7 +303,6 @@ function MapContent() {
         setSelectedRestaurant(null);
         setRestaurantCache({});
         setSearchCircleCache({});
-        setViewState("results");
         setRouteError(formatCommuteLimitMessage());
         return;
       }
@@ -351,13 +333,150 @@ function MapContent() {
     }
   };
 
-  const extractPolylineFromRoute = (
+  /**
+   * Resolves which lat/lng points to use as restaurant search centers for a
+   * given route, then kicks off the restaurant search.
+   *
+   * Strategy (in order):
+   *  1. If the route is in Metro Vancouver: fetch exact stop locations from
+   *     the TransLink GTFS index via /api/transit-stops.
+   *  2. If GTFS returns stops: use them directly as search centers.
+   *  3. Otherwise (outside Vancouver, or GTFS failure): fall back to sampling
+   *     the TRANSIT-only step polyline every 0.5 km.
+   */
+  const startRestaurantSearch = async (
     route: google.maps.DirectionsRoute,
     routeIndex: number,
   ) => {
-    const polylineCoordinates = extractPolylineCoordinates(route);
-    searchRestaurants(polylineCoordinates, turfFilterDistance, routeIndex);
-    return polylineCoordinates;
+    // Always include the route's origin and destination as search points so
+    // users also see restaurants near where they start and end their journey.
+    const { origin, destination } = getRouteEndpoints(route);
+    const originName =
+      route.legs[0]?.start_address?.split(",")[0] ?? "Start";
+    const destinationName =
+      route.legs[route.legs.length - 1]?.end_address?.split(",")[0] ??
+      "Destination";
+    const endpoints = [
+      origin ? { ...origin, name: originName } : null,
+      destination ? { ...destination, name: destinationName } : null,
+    ].filter((p): p is { lat: number; lng: number; name: string } => p !== null);
+
+    // Collect transit step data needed for GTFS lookup
+    type TransitStepInput = {
+      departureLat: number;
+      departureLng: number;
+      arrivalLat: number;
+      arrivalLng: number;
+      routeShortName: string;
+    };
+
+    const transitSteps: TransitStepInput[] = route.legs
+      .flatMap((leg) => leg.steps)
+      .filter((step) => isTransitStep(step))
+      .flatMap((step) => {
+        const transit = getStepTransit(step);
+        if (!transit?.departure_stop?.location || !transit?.arrival_stop?.location) {
+          return [];
+        }
+        const dep = transit.departure_stop.location as unknown as { lat: number; lng: number };
+        const arr = transit.arrival_stop.location as unknown as { lat: number; lng: number };
+        return [
+          {
+            departureLat: dep.lat,
+            departureLng: dep.lng,
+            arrivalLat: arr.lat,
+            arrivalLng: arr.lng,
+            routeShortName:
+              transit.line?.short_name ?? transit.line?.name ?? "",
+          },
+        ];
+      });
+
+    // Try GTFS lookup if the route starts in Metro Vancouver
+    const firstStep = transitSteps[0];
+    if (firstStep && isWithinMetroVancouver(firstStep.departureLat, firstStep.departureLng)) {
+      try {
+        const response = await fetch("/api/transit-stops", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ steps: transitSteps }),
+        });
+        if (response.ok) {
+          const data = (await response.json()) as {
+            stops: { lat: number; lng: number; name: string }[];
+          };
+          if (data.stops.length > 0) {
+            const allPoints = [...endpoints, ...data.stops];
+            console.group(`[ride-n-dine] Route ${routeIndex} — GTFS stop points (${allPoints.length} total)`);
+            console.table(
+              allPoints.map((p, i) => ({
+                "#": i,
+                source: i < endpoints.length ? "endpoint" : "GTFS",
+                name: p.name ?? "(unnamed)",
+                lat: p.lat.toFixed(5),
+                lng: p.lng.toFixed(5),
+              })),
+            );
+            console.groupEnd();
+            searchRestaurants(
+              allPoints,
+              turfFilterDistance,
+              routeIndex,
+            );
+            return;
+          } else {
+            console.warn(`[ride-n-dine] Route ${routeIndex} — GTFS returned 0 stops, falling back to polyline sampling`);
+          }
+        }
+      } catch (err) {
+        console.warn("[ride-n-dine] GTFS stop lookup failed, using fallback:", err);
+      }
+    } else if (!firstStep) {
+      console.warn(`[ride-n-dine] Route ${routeIndex} — no transit steps found, using fallback`);
+    } else {
+      console.info(`[ride-n-dine] Route ${routeIndex} — outside Metro Vancouver, using polyline fallback`);
+    }
+
+    // Fallback: sample the transit-only polyline at tight intervals
+    const transitPolyline = extractTransitPolyline(route);
+    if (transitPolyline.length > 0) {
+      const fallbackPoints = computeSearchPoints(transitPolyline, {
+        searchIntervalKm: fallbackSearchInterval,
+        apiSearchRadiusM: apiSearchRadius,
+      });
+      const allPoints = [...endpoints, ...fallbackPoints];
+      console.group(`[ride-n-dine] Route ${routeIndex} — fallback polyline sample points (${allPoints.length} total)`);
+      console.table(
+        allPoints.map((p, i) => ({
+          "#": i,
+          source: i < endpoints.length ? "endpoint" : "polyline-sample",
+          name: (p as { name?: string }).name ?? "(unnamed)",
+          lat: p.lat.toFixed(5),
+          lng: p.lng.toFixed(5),
+        })),
+      );
+      console.groupEnd();
+      searchRestaurants(
+        allPoints,
+        turfFilterDistance,
+        routeIndex,
+      );
+      return;
+    }
+
+    // Last resort: use the full route polyline (original behaviour)
+    const fullPolyline = extractPolylineCoordinates(route);
+    const lastResortPoints = computeSearchPoints(fullPolyline, {
+      searchIntervalKm: fallbackSearchInterval,
+      apiSearchRadiusM: apiSearchRadius,
+    });
+    const allLastResort = [...endpoints, ...lastResortPoints];
+    console.warn(`[ride-n-dine] Route ${routeIndex} — last-resort full polyline sample (${allLastResort.length} points)`);
+    searchRestaurants(
+      allLastResort,
+      turfFilterDistance,
+      routeIndex,
+    );
   };
 
   // Handler: User selects a route from the alternatives
@@ -371,11 +490,11 @@ function MapContent() {
     // Cache miss: first time selecting this route, search now
     const selectedRoute = routes[routeIndex];
     setRouteError(null);
-    extractPolylineFromRoute(selectedRoute, routeIndex);
+    void startRestaurantSearch(selectedRoute, routeIndex);
   };
 
   const searchRestaurants = async (
-    polylineCoordinates: google.maps.LatLngLiteral[],
+    stopPoints: { lat: number; lng: number; name?: string }[],
     filterDistance: number,
     routeIndex: number,
   ) => {
@@ -399,14 +518,49 @@ function MapContent() {
       }, remainingMs);
     };
 
-    const searchPoints = computeSearchPoints(polylineCoordinates, {
-      searchIntervalKm: searchInterval,
-      apiSearchRadiusM: apiSearchRadius,
-    });
+    // Deduplicate stops that are within one search radius of each other to
+    // avoid redundant API calls, then cap at the server's 25-point limit.
+    const minSpacingKm = (apiSearchRadius / 1000) * 0.9;
+    const deduped: { lat: number; lng: number; name?: string }[] = [];
+    for (const stop of stopPoints) {
+      const tooClose = deduped.some((existing) => {
+        const d = turf.distance(
+          turf.point([stop.lng, stop.lat]),
+          turf.point([existing.lng, existing.lat]),
+          { units: "kilometers" },
+        );
+        return d < minSpacingKm;
+      });
+      if (!tooClose) deduped.push(stop);
+    }
 
-    const circles: SearchCircle[] = searchPoints.map((center) => ({
-      center,
-      radius: apiSearchRadius,
+    // If still over the limit, spread evenly across the list
+    const MAX_POINTS = 25;
+    let searchPoints = deduped;
+    if (deduped.length > MAX_POINTS) {
+      const step = deduped.length / MAX_POINTS;
+      searchPoints = Array.from({ length: MAX_POINTS }, (_, i) =>
+        deduped[Math.min(Math.round(i * step), deduped.length - 1)],
+      );
+    }
+
+    console.group(
+      `[ride-n-dine] Route ${routeIndex} — final search circles after dedup (${searchPoints.length} of ${stopPoints.length})`,
+    );
+    console.table(
+      searchPoints.map((sp, i) => ({
+        "#": i,
+        name: sp.name ?? "(unnamed)",
+        lat: sp.lat.toFixed(5),
+        lng: sp.lng.toFixed(5),
+      })),
+    );
+    console.groupEnd();
+
+    const circles: SearchCircle[] = searchPoints.map((sp) => ({
+      center: { lat: sp.lat, lng: sp.lng },
+      radius: turfFilterDistance,
+      name: sp.name,
     }));
     setSearchCircleCache((prev) => ({ ...prev, [routeIndex]: circles }));
 
@@ -431,9 +585,11 @@ function MapContent() {
       }
 
       const data = (await response.json()) as { places: PlaceSearchResult[] };
+      // Filter against searchPoints (the deduplicated set that has visible circles),
+      // not the raw stopPoints — this keeps displayed restaurants inside the circles.
       processAllResults(
         data.places,
-        polylineCoordinates,
+        searchPoints,
         filterDistance,
         routeIndex,
         searchId,
@@ -451,7 +607,7 @@ function MapContent() {
 
   const processAllResults = (
     results: PlaceSearchResult[],
-    polylineCoordinates: google.maps.LatLngLiteral[],
+    stopPoints: { lat: number; lng: number }[],
     filterDistance: number,
     routeIndex: number,
     searchId: number,
@@ -461,34 +617,22 @@ function MapContent() {
       return;
     }
 
-    // Validate coordinates
-    const validCoordinates = polylineCoordinates.filter(
-      (c) =>
-        typeof c.lat === "number" &&
-        typeof c.lng === "number" &&
-        !isNaN(c.lat) &&
-        !isNaN(c.lng),
+    const validStops = stopPoints.filter(
+      (s) =>
+        typeof s.lat === "number" &&
+        typeof s.lng === "number" &&
+        !isNaN(s.lat) &&
+        !isNaN(s.lng),
     );
 
-    if (validCoordinates.length < 2) {
-      console.error("Not enough valid coordinates");
+    if (validStops.length === 0) {
+      console.error("No valid stop points for restaurant filtering");
       finishRestaurantSearch(searchId);
       return;
     }
 
-    // Create Turf.js line for distance calculations
-    const turfCoords = validCoordinates.map((c) => [c.lng, c.lat]);
-    let routeLine = turf.lineString(turfCoords);
-
-    // Simplify line to avoid precision issues
-    try {
-      routeLine = turf.simplify(routeLine, {
-        tolerance: 0.0001,
-        highQuality: false,
-      });
-    } catch (e) {
-      console.warn("Could not simplify line:", e);
-    }
+    // Pre-compute Turf points for each stop (avoids re-creating inside the loop)
+    const stopTurfPoints = validStops.map((s) => turf.point([s.lng, s.lat]));
 
     // Filter and transform restaurants
     const restaurants = results
@@ -520,25 +664,25 @@ function MapContent() {
         }
 
         try {
-          // Calculate distance from route
+          // Distance = metres to the nearest transit stop
           const restaurantPoint = turf.point([lng, lat]);
-          const distance = turf.pointToLineDistance(
-            restaurantPoint,
-            routeLine,
-            { units: "meters" },
-          );
+          let minDistance = Infinity;
+          for (const stopPoint of stopTurfPoints) {
+            const d = turf.distance(restaurantPoint, stopPoint, {
+              units: "meters",
+            });
+            if (d < minDistance) minDistance = d;
+          }
 
-          // Filter: Keep only within filter distance
-          if (distance > filterDistance) {
+          if (minDistance > filterDistance) {
             return null;
           }
 
-          // Transform to Restaurant type
           return {
             placeId: place.place_id || "",
             name: place.name || "Unknown Restaurant",
             location: { lat, lng },
-            distanceFromRoute: Math.round(distance),
+            distanceFromRoute: Math.round(minDistance),
             types: place.types || [],
             rating: place.rating,
             userRatingsTotal: place.user_ratings_total,
@@ -546,7 +690,6 @@ function MapContent() {
             vicinity: place.vicinity,
           };
         } catch {
-          // Silently skip restaurants that cause errors
           return null;
         }
       })
@@ -559,29 +702,6 @@ function MapContent() {
     setRestaurantCache((prev) => ({ ...prev, [routeIndex]: restaurants }));
     finishRestaurantSearch(searchId);
   };
-
-  // When user selects a destination in hero:
-  // 1) run directions once location + routes library are ready, or
-  // 2) fall back to manual origin entry if location is unavailable.
-  useEffect(() => {
-    if (!selectedPrediction) return;
-
-    setDestinationLabel(selectedPrediction.description);
-
-    if (userLocation) {
-      setOriginLabel("Current Location");
-      handleGetDirection(userLocation, {
-        placeId: selectedPrediction.place_id,
-      });
-      return;
-    }
-
-    if (locationError) {
-      setOriginLabel("");
-      setViewState("results");
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPrediction, userLocation, locationError]);
 
   return (
     <div className="h-screen w-screen flex flex-col bg-app-bg relative overflow-hidden">
@@ -604,119 +724,58 @@ function MapContent() {
         />
       </div>
 
-      {/* AnimatePresence for Hero overlay */}
-      <AnimatePresence>
-        {viewState === "hero" && (
-          <motion.div
-            key="hero"
-            initial={{ opacity: 0, y: 40 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -40 }}
-            transition={{ duration: 0.6, ease: "easeInOut" }}
-            className="absolute inset-0 z-20 flex items-center justify-center"
-          >
-            <motion.div
-              layoutId="search-bar"
-              className="bg-card-bg/85 backdrop-blur-xl border border-border shadow-2xl rounded-2xl px-8 py-8 md:py-12 flex flex-col items-center gap-4 md:gap-8 w-[86vw] max-w-xl mx-auto"
-            >
-              <h1 className="text-2xl md:text-5xl font-bold text-text-primary text-center tracking-tight">
-                Hungry on your commute?
-              </h1>
-              <div className="w-full flex flex-col gap-4">
-                <ThemedAutocompleteInput
-                  value={input}
-                  onChange={setInput}
-                  predictions={predictions}
-                  loading={autocompleteLoading}
-                  onSelect={(prediction) => {
-                    setSelectedPrediction(prediction);
-                  }}
-                  activeIndex={activeIndex}
-                  setActiveIndex={setActiveIndex}
-                />
-                {locationError && (
-                  <span className="text-red-400 text-sm text-center mt-2">
-                    {locationError}
-                  </span>
-                )}
-                {routeError && (
-                  <span className="text-amber-300 text-sm text-center mt-2">
-                    {routeError}
-                  </span>
-                )}
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* Navbar always on top */}
       <Navbar themeMode={themeMode} onToggleTheme={toggleTheme} />
 
-      {/* Left panel: search bar morphs from hero, then route selector appears below */}
-      <AnimatePresence>
-        {viewState === "results" && (
-          <motion.div
-            key="results-left-panel"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-            className="absolute top-20 left-4 right-4 z-20 lg:top-20 lg:left-8 lg:right-auto lg:w-md lg:max-w-[90vw] flex flex-col gap-3 lg:max-h-[calc(100vh-6rem)]"
-          >
-          <motion.div layoutId="search-bar">
-              <RouteSearch
-                collapsed={
-                  !isSearchExpanded &&
-                  Boolean(originLabel && destinationLabel)
-                }
-                onExpand={() => setIsSearchExpanded(true)}
-                onSearch={(o, d, oLabel, dLabel) => {
-                  setOriginLabel(oLabel);
-                  setDestinationLabel(dLabel);
-                  void handleGetDirection(o, d);
-                  setIsSearchExpanded(false);
-                }}
-                isLoading={isFetchingDirections}
-                searchDisabled={
-                  !canSearch || isFetchingDirections || isSearchingRestaurants
-                }
-                searchBlockedMessage={
-                  routeError && !dailyLimitReached ? routeError : null
-                }
-                defaultOrigin={originLabel}
-                defaultDestination={destinationLabel}
-                userLocation={userLocation}
-                searchCount={searchCount}
-                dailyLimit={dailyLimit}
-                dailyLimitReached={dailyLimitReached}
-              />
-            </motion.div>
-            {routes.length > 0 && (
-              <div className="hidden lg:block flex-1 min-h-0">
-                <RouteSelectionPanel
-                  routes={routes}
-                  selectedRouteIndex={selectedRouteIndex}
-                  onRouteSelect={handleRouteSelect}
-                />
-              </div>
-            )}
-          </motion.div>
+      {/* Search box + route panel — always visible top-left */}
+      <div className="absolute top-20 left-4 right-4 z-20 lg:top-20 lg:left-8 lg:right-auto lg:w-md lg:max-w-[90vw] flex flex-col gap-3 lg:max-h-[calc(100vh-6rem)]">
+        <RouteSearch
+          collapsed={
+            !isSearchExpanded &&
+            Boolean(originLabel && destinationLabel)
+          }
+          onExpand={() => setIsSearchExpanded(true)}
+          onSearch={(o, d, oLabel, dLabel) => {
+            setOriginLabel(oLabel);
+            setDestinationLabel(dLabel);
+            void handleGetDirection(o, d);
+            setIsSearchExpanded(false);
+          }}
+          isLoading={isFetchingDirections}
+          searchDisabled={
+            !canSearch || isFetchingDirections || isSearchingRestaurants
+          }
+          searchBlockedMessage={
+            routeError && !dailyLimitReached ? routeError : null
+          }
+          defaultOrigin={originLabel}
+          defaultDestination={destinationLabel}
+          userLocation={userLocation}
+          searchCount={searchCount}
+          dailyLimit={dailyLimit}
+          dailyLimitReached={dailyLimitReached}
+        />
+        {routes.length > 0 && (
+          <div className="hidden lg:block flex-1 min-h-0">
+            <RouteSelectionPanel
+              routes={routes}
+              selectedRouteIndex={selectedRouteIndex}
+              onRouteSelect={handleRouteSelect}
+            />
+          </div>
         )}
-      </AnimatePresence>
+      </div>
 
-      {/* Results UI: restaurant sidebar (right rail), only in results view */}
-      {viewState === "results" && (
-        <>
-          {/* Desktop sidebar */}
-          <RestaurantSidebar
-            variant="desktop"
-            restaurants={restaurants}
-            onRestaurantClick={setSelectedRestaurant}
-          />
+      {/* Restaurant sidebar (desktop right rail) + mobile bottom sheet */}
+      <>
+        <RestaurantSidebar
+          variant="desktop"
+          restaurants={restaurants}
+          onRestaurantClick={setSelectedRestaurant}
+        />
 
-          {/* Mobile bottom sheet flow: routes -> restaurants */}
-          {(() => {
+        {/* Mobile bottom sheet flow: routes -> restaurants */}
+        {(() => {
             const phase =
               selectedRouteIndex !== null
                 ? "restaurants"
@@ -783,8 +842,7 @@ function MapContent() {
               </BottomSheet>
             );
           })()}
-        </>
-      )}
+      </>
     </div>
   );
 }

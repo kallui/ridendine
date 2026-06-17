@@ -8,8 +8,36 @@ import {
 } from "@vis.gl/react-google-maps";
 import { useEffect, useRef } from "react";
 import { Restaurant, SearchCircle } from "@/app/page";
-import { getRouteBoundsPoints, buildRoutePath, getRouteEndpoints } from "@/lib/directions-paths";
+import {
+  getRouteBoundsPoints,
+  buildRoutePath,
+  getRouteEndpoints,
+  getRouteSegments,
+} from "@/lib/directions-paths";
 import RestaurantMarkerPopup from "./RestaurantMarkerPopup";
+
+/** Single-letter badge shown on the map at each transit boarding point. */
+function getTransitShortLabel(vehicleType?: string): string {
+  if (!vehicleType) return "T";
+  const map: Record<string, string> = {
+    BUS: "B",
+    INTERCITY_BUS: "B",
+    TROLLEYBUS: "B",
+    SUBWAY: "S",
+    METRO_RAIL: "S",
+    HEAVY_RAIL: "R",
+    COMMUTER_TRAIN: "R",
+    RAIL: "R",
+    HIGH_SPEED_TRAIN: "R",
+    TRAM: "T",
+    LIGHT_RAIL: "T",
+    FERRY: "F",
+    CABLE_CAR: "C",
+    GONDOLA_LIFT: "G",
+    MONORAIL: "M",
+  };
+  return map[vehicleType] ?? "T";
+}
 
 interface MapProps {
   centerCoordinate: { lat: number; lng: number };
@@ -43,7 +71,10 @@ export default function Map({
 }: MapProps) {
   const map = useMap();
   const polylinesRef = useRef<google.maps.Polyline[]>([]);
+  const transitBadgesRef = useRef<google.maps.Marker[]>([]);
   const circlesRef = useRef<google.maps.Circle[]>([]);
+  const stopMarkersRef = useRef<google.maps.Marker[]>([]);
+  const infoWindowRef = useRef<google.maps.InfoWindow | null>(null);
 
   useEffect(() => {
     if (!map || !selectedRestaurant) return;
@@ -52,32 +83,113 @@ export default function Map({
   }, [map, selectedRestaurant]);
 
   // Draw route polylines directly (REST directions JSON does not render via DirectionsRenderer).
+  // Selected route: per-segment (dashed walking, solid blue transit + mode badges).
+  // Non-selected routes: single gray line.
   useEffect(() => {
     if (!map) return;
 
-    polylinesRef.current.forEach((polyline) => polyline.setMap(null));
+    polylinesRef.current.forEach((p) => p.setMap(null));
     polylinesRef.current = [];
+    transitBadgesRef.current.forEach((m) => m.setMap(null));
+    transitBadgesRef.current = [];
 
     routes.forEach((route, index) => {
-      const path = buildRoutePath(route);
-      if (path.length === 0) return;
-
       const isSelected = selectedRouteIndex === index;
-      const polyline = new google.maps.Polyline({
-        path,
-        geodesic: true,
-        strokeColor: isSelected ? "#FAFAFA" : "#52525B",
-        strokeWeight: isSelected ? 6 : 4,
-        strokeOpacity: isSelected ? 1 : 0.45,
-        zIndex: isSelected ? 2 : 1,
-        map,
-      });
-      polylinesRef.current.push(polyline);
+
+      if (!isSelected) {
+        const path = buildRoutePath(route);
+        if (path.length === 0) return;
+        polylinesRef.current.push(
+          new google.maps.Polyline({
+            path,
+            geodesic: true,
+            strokeColor: "#52525B",
+            strokeWeight: 4,
+            strokeOpacity: 0.45,
+            zIndex: 1,
+            map,
+          }),
+        );
+        return;
+      }
+
+      // Selected route — render each step individually
+      const segments = getRouteSegments(route);
+      for (const segment of segments) {
+        if (segment.path.length < 2) continue;
+
+        if (segment.travelMode === "WALKING") {
+          // Dashed gray line for walking segments
+          polylinesRef.current.push(
+            new google.maps.Polyline({
+              path: segment.path,
+              geodesic: true,
+              strokeOpacity: 0,
+              strokeWeight: 0,
+              icons: [
+                {
+                  icon: {
+                    path: "M 0,-1 0,1",
+                    strokeOpacity: 0.75,
+                    strokeColor: "#6B7280",
+                    strokeWeight: 2.5,
+                    scale: 3,
+                  },
+                  offset: "0",
+                  repeat: "14px",
+                },
+              ],
+              zIndex: 2,
+              map,
+            }),
+          );
+        } else {
+          // Solid blue line for transit segments
+          polylinesRef.current.push(
+            new google.maps.Polyline({
+              path: segment.path,
+              geodesic: true,
+              strokeColor: "#2563EB",
+              strokeWeight: 6,
+              strokeOpacity: 1,
+              zIndex: 2,
+              map,
+            }),
+          );
+
+          // Mode badge (B / S / R / T) at the boarding stop
+          if (segment.departureLocation) {
+            transitBadgesRef.current.push(
+              new google.maps.Marker({
+                position: segment.departureLocation,
+                map,
+                zIndex: 5,
+                icon: {
+                  path: google.maps.SymbolPath.CIRCLE,
+                  scale: 10,
+                  fillColor: "#1D4ED8",
+                  fillOpacity: 1,
+                  strokeColor: "#FFFFFF",
+                  strokeWeight: 2,
+                },
+                label: {
+                  text: getTransitShortLabel(segment.vehicleType),
+                  color: "#FFFFFF",
+                  fontSize: "10px",
+                  fontWeight: "bold",
+                },
+              }),
+            );
+          }
+        }
+      }
     });
 
     return () => {
-      polylinesRef.current.forEach((polyline) => polyline.setMap(null));
+      polylinesRef.current.forEach((p) => p.setMap(null));
       polylinesRef.current = [];
+      transitBadgesRef.current.forEach((m) => m.setMap(null));
+      transitBadgesRef.current = [];
     };
   }, [map, routes, selectedRouteIndex]);
 
@@ -120,29 +232,71 @@ export default function Map({
   useEffect(() => {
     if (!map) return;
 
-    circlesRef.current.forEach((circle) => circle.setMap(null));
+    circlesRef.current.forEach((c) => c.setMap(null));
     circlesRef.current = [];
+    stopMarkersRef.current.forEach((m) => m.setMap(null));
+    stopMarkersRef.current = [];
 
     if (showBounds && searchCircles.length > 0) {
       circlesRef.current = searchCircles.map((searchCircle) => {
         const circle = new google.maps.Circle({
           center: searchCircle.center,
           radius: searchCircle.radius,
-          strokeColor: "#71717A",
-          strokeOpacity: 0.5,
-          strokeWeight: 2,
-          fillColor: "#52525B",
-          fillOpacity: 0.08,
-          map: map,
+          strokeColor: "#2563EB",
+          strokeOpacity: 0.35,
+          strokeWeight: 1.5,
+          fillColor: "#2563EB",
+          fillOpacity: 0.06,
+          map,
         });
         if (onMapClick) circle.addListener("click", onMapClick);
         return circle;
       });
+
+      // Small dot at each stop center — hover shows name, click opens label
+      stopMarkersRef.current = searchCircles.map((searchCircle) => {
+        const marker = new google.maps.Marker({
+          position: searchCircle.center,
+          map,
+          zIndex: 3,
+          title: searchCircle.name,
+          icon: {
+            path: google.maps.SymbolPath.CIRCLE,
+            scale: 5,
+            fillColor: "#FFFFFF",
+            fillOpacity: 1,
+            strokeColor: "#2563EB",
+            strokeWeight: 2,
+          },
+        });
+
+        if (searchCircle.name) {
+          const openLabel = () => {
+            if (!infoWindowRef.current) {
+              infoWindowRef.current = new google.maps.InfoWindow();
+            }
+            infoWindowRef.current.setContent(
+              `<span style="font-size:13px;font-weight:500;padding:2px 4px">${searchCircle.name}</span>`,
+            );
+            infoWindowRef.current.open({ map, anchor: marker });
+          };
+          marker.addListener("mouseover", openLabel);
+          marker.addListener("click", openLabel);
+          marker.addListener("mouseout", () =>
+            infoWindowRef.current?.close(),
+          );
+        }
+
+        return marker;
+      });
     }
 
     return () => {
-      circlesRef.current.forEach((circle) => circle.setMap(null));
+      infoWindowRef.current?.close();
+      circlesRef.current.forEach((c) => c.setMap(null));
       circlesRef.current = [];
+      stopMarkersRef.current.forEach((m) => m.setMap(null));
+      stopMarkersRef.current = [];
     };
   }, [map, searchCircles, showBounds, onMapClick]);
 
