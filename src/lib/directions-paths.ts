@@ -1,10 +1,24 @@
 import { decode } from "@googlemaps/polyline-codec";
+import { isTransitStep, getStepTransit } from "@/lib/directions-normalize";
 
 export function extractPolylineCoordinates(
   route: google.maps.DirectionsRoute,
 ): google.maps.LatLngLiteral[] {
   return route.legs
     .flatMap((leg) => leg.steps)
+    .flatMap((step) => getStepCoordinates(step));
+}
+
+/**
+ * Like extractPolylineCoordinates but restricted to TRANSIT steps only.
+ * Used as the fallback search path when GTFS stop data is unavailable.
+ */
+export function extractTransitPolyline(
+  route: google.maps.DirectionsRoute,
+): google.maps.LatLngLiteral[] {
+  return route.legs
+    .flatMap((leg) => leg.steps)
+    .filter((step) => isTransitStep(step))
     .flatMap((step) => getStepCoordinates(step));
 }
 
@@ -23,7 +37,7 @@ function getStepCoordinates(
   return [];
 }
 
-function normalizeLatLng(
+export function normalizeLatLng(
   point: google.maps.LatLng | google.maps.LatLngLiteral,
 ): google.maps.LatLngLiteral {
   if (typeof (point as google.maps.LatLng).lat === "function") {
@@ -118,4 +132,41 @@ export function getRouteEndpoints(route: google.maps.DirectionsRoute): {
       ? normalizeLatLng(lastLeg.end_location)
       : null,
   };
+}
+
+export type RouteSegment = {
+  path: google.maps.LatLngLiteral[];
+  /** Raw travel_mode string: "WALKING", "TRANSIT", etc. */
+  travelMode: string;
+  /** GTFS/Google vehicle type string, e.g. "BUS", "SUBWAY", "HEAVY_RAIL". */
+  vehicleType?: string;
+  lineName?: string;
+  /** Lat/lng of the boarding stop for TRANSIT segments. */
+  departureLocation?: google.maps.LatLngLiteral;
+};
+
+/**
+ * Returns one RouteSegment per step so callers can render each leg
+ * with a distinct style (walking vs transit, bus vs train).
+ */
+export function getRouteSegments(
+  route: google.maps.DirectionsRoute,
+): RouteSegment[] {
+  return route.legs.flatMap((leg) =>
+    leg.steps.map((step) => {
+      const transit = getStepTransit(step);
+      const depLoc = transit?.departure_stop?.location;
+      const departureLocation = depLoc
+        ? normalizeLatLng(depLoc as google.maps.LatLng)
+        : undefined;
+      return {
+        path: getStepCoordinates(step),
+        travelMode: (step.travel_mode as string) ?? "",
+        vehicleType: transit?.line?.vehicle?.type as string | undefined,
+        lineName:
+          transit?.line?.short_name ?? transit?.line?.name ?? undefined,
+        departureLocation,
+      };
+    }),
+  );
 }
