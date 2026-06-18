@@ -63,6 +63,11 @@ function getRouteDayLimiter() {
 export async function checkRouteSearchLimit(
   identifier: string,
 ): Promise<RateLimitResult> {
+  // Set DISABLE_RATE_LIMIT=true in .env.local to bypass all limits during development.
+  if (process.env.DISABLE_RATE_LIMIT === "true") {
+    return { success: true, limit: 999, remaining: 999, reset: Date.now() + 86_400_000 };
+  }
+
   if (upstashConfigured()) {
     const r = await getRouteDayLimiter().limit(identifier);
     return { success: r.success, limit: r.limit, remaining: r.remaining, reset: r.reset };

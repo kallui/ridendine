@@ -6,7 +6,7 @@ import { useState, useMemo } from "react";
 
 type SortBy = "best" | "distance" | "rating";
 
-const MAX_DISTANCE = 750; // matches Turf.js filter distance
+const MAX_DISTANCE = 400; // matches the 400 m search radius used by the API
 
 function bestMatchScore(r: Restaurant): number {
   const ratingScore = ((r.rating ?? 0) / 5) * 0.65;
@@ -24,6 +24,8 @@ interface RestaurantSidebarProps {
   onRestaurantClick: (restaurant: Restaurant) => void;
   variant?: "desktop" | "sheet";
   onBack?: () => void;
+  /** Shows a loading skeleton instead of the empty state while the API is in flight. */
+  isSearching?: boolean;
   // sheet variant only: shows selected route summary above filters
   routeHeadline?: string;
 }
@@ -33,6 +35,7 @@ export default function RestaurantSidebar({
   onRestaurantClick,
   variant = "desktop",
   onBack,
+  isSearching = false,
   routeHeadline,
 }: RestaurantSidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -61,7 +64,7 @@ export default function RestaurantSidebar({
 
   const isFiltered = searchQuery || minRating > 0;
 
-  if (restaurants.length === 0) return null;
+  if (restaurants.length === 0 && !isSearching) return null;
 
   // Sheet variant: content-only for inside BottomSheet.
   // Filters are sticky so they stay visible while the list scrolls.
@@ -166,10 +169,11 @@ export default function RestaurantSidebar({
             {/* Header */}
             <div className="flex items-center justify-between p-4 border-b border-border shrink-0">
               <h2 className="text-xl font-bold text-text-primary">
-                {isFiltered
-                  ? `${filteredRestaurants.length} of ${restaurants.length}`
-                  : restaurants.length}{" "}
-                restaurants
+                {isSearching
+                  ? "Restaurants"
+                  : isFiltered
+                    ? `${filteredRestaurants.length} of ${restaurants.length} restaurants`
+                    : `${restaurants.length} restaurants`}
               </h2>
               <button
                 onClick={() => setIsCollapsed(true)}
@@ -248,7 +252,24 @@ export default function RestaurantSidebar({
             {/* Restaurant List */}
             <div className="relative flex-1 min-h-0">
               <div className="overflow-y-auto h-full p-4 pb-8 space-y-3">
-                {filteredRestaurants.length === 0 ? (
+                {isSearching ? (
+                  <>
+                    <p className="text-text-muted text-xs text-center pt-2 pb-1 flex items-center justify-center gap-2">
+                      <span className="inline-block w-3 h-3 rounded-full border-2 border-text-muted border-t-transparent animate-spin" />
+                      Searching for restaurants…
+                    </p>
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <div
+                        key={i}
+                        className="rounded-lg border border-border bg-card-bg p-3 space-y-2 animate-pulse"
+                      >
+                        <div className="h-3.5 w-3/5 rounded bg-border" />
+                        <div className="h-2.5 w-2/5 rounded bg-border opacity-60" />
+                        <div className="h-2.5 w-4/5 rounded bg-border opacity-40" />
+                      </div>
+                    ))}
+                  </>
+                ) : filteredRestaurants.length === 0 ? (
                   <p className="text-text-muted text-sm text-center pt-8">
                     No restaurants match your filters.
                   </p>

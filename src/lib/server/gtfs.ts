@@ -269,34 +269,6 @@ function parseStopTimes(
 
 // ---- Public query API -----------------------------------------------------
 
-function findNearestStop(
-  index: GtfsIndex,
-  lat: number,
-  lng: number,
-): { stopId: string; lat: number; lng: number } | null {
-  const search = (delta: number) =>
-    index.tree.search({
-      minX: lng - delta,
-      minY: lat - delta,
-      maxX: lng + delta,
-      maxY: lat + delta,
-    });
-
-  let candidates = search(0.005); // ~500 m first
-  if (candidates.length === 0) candidates = search(0.03); // widen to ~3 km
-  if (candidates.length === 0) return null;
-
-  const closest = candidates.reduce(
-    (best: RBushStopItem, c: RBushStopItem) => {
-      const d = (c.minX - lng) ** 2 + (c.minY - lat) ** 2;
-      const bd = (best.minX - lng) ** 2 + (best.minY - lat) ** 2;
-      return d < bd ? c : best;
-    },
-  );
-
-  return { stopId: closest.stopId, lat: closest.minY, lng: closest.minX };
-}
-
 export type TransitStepInput = {
   departureLat: number;
   departureLng: number;
@@ -305,21 +277,65 @@ export type TransitStepInput = {
   routeShortName: string;
 };
 
-/** Resolve stop IDs in order between dep and arr for a given candidate set of route IDs. */
-function sliceStopsBetween(
+/**
+ * Within a single route's stop sequence, find the stop closest to (lat, lng).
+ *
+ * Using the route's own stop list (not the global R-tree) avoids "orphan stop"
+ * IDs — stops that exist in stops.txt with coordinates but are not scheduled in
+ * any trip's stop_times (e.g. TransLink IDs like JYSES, GVSDS, 99xxx).  By
+ * searching only the stops that actually belong to this route we always find the
+ * correct platform stop, regardless of what other stops are geographically near.
+ *
+ * Returns null when the closest stop exceeds maxDistM (default 1 km).
+ */
+function findClosestInRoute(
+  index: GtfsIndex,
+  stopIds: string[],
+  lat: number,
+  lng: number,
+  maxDistM = 1_000,
+): { idx: number; stopId: string } | null {
+  let bestDist = Infinity;
+  let bestIdx = -1;
+  let bestStopId = "";
+
+  for (let i = 0; i < stopIds.length; i++) {
+    const s = index.stops.get(stopIds[i]);
+    if (!s) continue;
+    const dLat = (lat - s.lat) * 111_320;
+    const dLng = (lng - s.lng) * 111_320 * Math.cos(s.lat * (Math.PI / 180));
+    const d = Math.sqrt(dLat * dLat + dLng * dLng);
+    if (d < bestDist) {
+      bestDist = d;
+      bestIdx = i;
+      bestStopId = stopIds[i];
+    }
+  }
+
+  if (bestIdx === -1 || bestDist > maxDistM) return null;
+  return { idx: bestIdx, stopId: bestStopId };
+}
+
+/**
+ * For each route in routeIds, try both directions and return the stops between
+ * the closest dep stop and closest arr stop (in sequence order).
+ */
+function tryRouteIds(
   index: GtfsIndex,
   routeIds: string[],
-  depStopId: string,
-  arrStopId: string,
+  depLat: number,
+  depLng: number,
+  arrLat: number,
+  arrLng: number,
 ): string[] | null {
   for (const routeId of routeIds) {
     const directions = index.routeStops.get(routeId);
     if (!directions) continue;
     for (const stopIds of directions.values()) {
-      const depIdx = stopIds.indexOf(depStopId);
-      const arrIdx = stopIds.indexOf(arrStopId);
-      if (depIdx !== -1 && arrIdx !== -1 && depIdx <= arrIdx) {
-        return stopIds.slice(depIdx, arrIdx + 1);
+      const dep = findClosestInRoute(index, stopIds, depLat, depLng);
+      const arr = findClosestInRoute(index, stopIds, arrLat, arrLng);
+      if (dep && arr && dep.idx <= arr.idx) {
+        return stopIds.slice(dep.idx, arr.idx + 1);
       }
     }
   }
@@ -330,28 +346,16 @@ function sliceStopsBetween(
  * Returns every transit stop (in order) between the departure and arrival
  * stops of a single transit step.
  *
- * Matching is attempted in three tiers:
- *  1. Exact route name match (fast, works for all bus routes).
- *  2. Case-insensitive / substring name match (handles "SkyTrain Expo Line"
- *     vs "Expo Line" mismatches from the Google Directions API).
- *  3. Stop-pair fallback: scan every route for one that runs dep→arr in order,
- *     ignoring the route name entirely.  Reliable for any rail line.
+ * Three tiers, each using route-aware closest-stop matching to avoid orphan IDs:
+ *  1. Exact route short-name lookup.
+ *  2. Case-insensitive / substring name match (e.g. "SkyTrain Expo Line" ↔ "Expo Line").
+ *  3. Full route scan — ignores route name, finds any route whose stop sequence
+ *     runs from a stop near dep to a stop near arr in the right order.
  */
 export function getStopsBetween(
   index: GtfsIndex,
   step: TransitStepInput,
 ): TransitStopPoint[] {
-  const depStop = findNearestStop(index, step.departureLat, step.departureLng);
-  const arrStop = findNearestStop(index, step.arrivalLat, step.arrivalLng);
-
-  if (!depStop || !arrStop) {
-    console.warn(
-      `[GTFS] Could not find nearest stops for step "${step.routeShortName}" ` +
-        `dep=(${step.departureLat},${step.departureLng}) arr=(${step.arrivalLat},${step.arrivalLng})`,
-    );
-    return [];
-  }
-
   const toPoints = (stopIds: string[]): TransitStopPoint[] =>
     stopIds
       .map((id) => {
@@ -363,11 +367,13 @@ export function getStopsBetween(
   // Tier 1 — exact short-name match
   const exactIds = index.routesByShortName.get(step.routeShortName) ?? [];
   if (exactIds.length > 0) {
-    const stopIds = sliceStopsBetween(
+    const stopIds = tryRouteIds(
       index,
       exactIds,
-      depStop.stopId,
-      arrStop.stopId,
+      step.departureLat,
+      step.departureLng,
+      step.arrivalLat,
+      step.arrivalLng,
     );
     if (stopIds) {
       console.log(
@@ -378,7 +384,6 @@ export function getStopsBetween(
   }
 
   // Tier 2 — case-insensitive / substring name match
-  // Handles "SkyTrain Expo Line" (Google) vs "Expo Line" (GTFS), etc.
   if (step.routeShortName) {
     const needleLower = step.routeShortName.toLowerCase();
     const fuzzyIds: string[] = [];
@@ -393,11 +398,13 @@ export function getStopsBetween(
       }
     }
     if (fuzzyIds.length > 0) {
-      const stopIds = sliceStopsBetween(
+      const stopIds = tryRouteIds(
         index,
         fuzzyIds,
-        depStop.stopId,
-        arrStop.stopId,
+        step.departureLat,
+        step.departureLng,
+        step.arrivalLat,
+        step.arrivalLng,
       );
       if (stopIds) {
         console.log(
@@ -408,28 +415,29 @@ export function getStopsBetween(
     }
   }
 
-  // Tier 3 — stop-pair fallback: find any route where dep comes before arr
-  // (ignores route name entirely — works for any rail line regardless of naming)
+  // Tier 3 — full route scan: find any route whose stop sequence runs
+  // from a stop near dep to a stop near arr in order.
   console.warn(
-    `[GTFS] "${step.routeShortName}" — no name match found, trying stop-pair fallback ` +
-      `(dep=${depStop.stopId} arr=${arrStop.stopId})`,
+    `[GTFS] "${step.routeShortName}" — no name match, trying full route scan ` +
+      `dep=(${step.departureLat},${step.departureLng}) arr=(${step.arrivalLat},${step.arrivalLng})`,
   );
+
   for (const [, directions] of index.routeStops) {
     for (const stopIds of directions.values()) {
-      const depIdx = stopIds.indexOf(depStop.stopId);
-      const arrIdx = stopIds.indexOf(arrStop.stopId);
-      if (depIdx !== -1 && arrIdx !== -1 && depIdx <= arrIdx) {
+      const dep = findClosestInRoute(index, stopIds, step.departureLat, step.departureLng, 500);
+      const arr = findClosestInRoute(index, stopIds, step.arrivalLat, step.arrivalLng, 500);
+      if (dep && arr && dep.idx <= arr.idx) {
         console.log(
-          `[GTFS] "${step.routeShortName}" matched via stop-pair fallback → ${arrIdx - depIdx + 1} stops`,
+          `[GTFS] "${step.routeShortName}" matched via full route scan → ${arr.idx - dep.idx + 1} stops`,
         );
-        return toPoints(stopIds.slice(depIdx, arrIdx + 1));
+        return toPoints(stopIds.slice(dep.idx, arr.idx + 1));
       }
     }
   }
 
   console.error(
-    `[GTFS] "${step.routeShortName}" — all tiers failed. ` +
-      `dep stop: ${depStop.stopId}, arr stop: ${arrStop.stopId}`,
+    `[GTFS] "${step.routeShortName}" — all tiers failed ` +
+      `dep=(${step.departureLat},${step.departureLng}) arr=(${step.arrivalLat},${step.arrivalLng})`,
   );
   return [];
 }
