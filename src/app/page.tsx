@@ -447,7 +447,7 @@ function MapContent() {
     if (transitPolyline.length > 0) {
       const fallbackPoints = computeSearchPoints(transitPolyline, {
         searchIntervalKm: fallbackSearchInterval,
-        searchRadiusM: searchRadius,
+        apiSearchRadiusM: searchRadius,
       });
       const allPoints = [...endpoints, ...fallbackPoints];
       console.group(`[ride-n-dine] Route ${routeIndex} — fallback polyline sample points (${allPoints.length} total)`);
