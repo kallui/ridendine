@@ -7,13 +7,21 @@ import {
 } from "@/lib/rate-limit-config";
 import {
   canSearchNow,
+  COUNT_KEY,
+  DATE_KEY,
   incrementSearchCount,
   isDailyLimitReached,
   readSearchCount,
   ROUTE_SEARCH_COOLDOWN_MS,
+  todayKey,
 } from "@/lib/client/search-guards-core";
 
 export { AUTOCOMPLETE_DEBOUNCE_MS };
+
+// Mirror of server-side DISABLE_RATE_LIMIT — set NEXT_PUBLIC_DISABLE_RATE_LIMIT=true
+// in .env.local to remove the client-side counter during development.
+const DEV_BYPASS =
+  process.env.NEXT_PUBLIC_DISABLE_RATE_LIMIT === "true";
 
 export function useRouteSearchGuards() {
   const [count, setCount] = useState(0);
@@ -32,10 +40,11 @@ export function useRouteSearchGuards() {
     };
   }, []);
 
-  const dailyLimitReached = isDailyLimitReached(count);
-  const canSearch = canSearchNow(count, cooldownActive);
+  const dailyLimitReached = !DEV_BYPASS && isDailyLimitReached(count);
+  const canSearch = !dailyLimitReached && !cooldownActive;
 
   const recordSearch = useCallback(() => {
+    if (DEV_BYPASS) return;
     const next = incrementSearchCount(sessionStorage);
     setCount(next);
 
@@ -46,12 +55,24 @@ export function useRouteSearchGuards() {
     }, ROUTE_SEARCH_COOLDOWN_MS);
   }, []);
 
+  /**
+   * Call this when the server returns 429 so the client counter syncs to
+   * the limit immediately, instead of drifting below the real server value.
+   */
+  const markLimitReached = useCallback(() => {
+    if (DEV_BYPASS) return;
+    sessionStorage.setItem(COUNT_KEY, String(DAILY_ROUTE_SEARCH_LIMIT));
+    sessionStorage.setItem(DATE_KEY, todayKey());
+    setCount(DAILY_ROUTE_SEARCH_LIMIT);
+  }, []);
+
   return {
     canSearch,
     dailyLimitReached,
     count,
-    dailyLimit: DAILY_ROUTE_SEARCH_LIMIT,
+    dailyLimit: DEV_BYPASS ? 0 : DAILY_ROUTE_SEARCH_LIMIT,
     recordSearch,
+    markLimitReached,
   };
 }
 

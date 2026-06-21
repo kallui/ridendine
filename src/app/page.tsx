@@ -30,7 +30,6 @@ import {
 import { isWithinMetroVancouver } from "@/lib/geo-bounds";
 import type { PlaceSearchResult } from "@/lib/places-types";
 import { computeSearchPoints } from "@/lib/route-sampling";
-import * as turf from "@turf/turf";
 
 export type Restaurant = {
   placeId: string;
@@ -67,10 +66,10 @@ function MapContent() {
     count: searchCount,
     dailyLimit,
     recordSearch,
+    markLimitReached,
   } = useRouteSearchGuards();
   // === SEARCH CONFIGURATION ===
-  const turfFilterDistance = 400; // 5-min walk (~400 m) from nearest stop
-  const apiSearchRadius = 600; // API search radius: cast a modest net, then filter to turfFilterDistance
+  const searchRadius = 400; // 5-min walk (~400 m) — used for both the API call and visible circles
   const fallbackSearchInterval = 0.5; // Fallback: sample transit polyline every X km when GTFS unavailable
   const minRestaurantLoadingMs = 450;
 
@@ -268,6 +267,9 @@ function MapContent() {
       }
 
       if (!response.ok) {
+        // Sync client counter to max when the server says the limit is reached,
+        // so the UI immediately reflects the blocked state on the next render.
+        if (response.status === 429) markLimitReached();
         setRouteError(await parseApiError(response));
         setIsSearchExpanded(true);
         return;
@@ -357,9 +359,9 @@ function MapContent() {
       route.legs[route.legs.length - 1]?.end_address?.split(",")[0] ??
       "Destination";
     const endpoints = [
-      origin ? { ...origin, name: originName } : null,
-      destination ? { ...destination, name: destinationName } : null,
-    ].filter((p): p is { lat: number; lng: number; name: string } => p !== null);
+      origin ? { ...origin, name: originName, exempt: "endpoint" as const } : null,
+      destination ? { ...destination, name: destinationName, exempt: "endpoint" as const } : null,
+    ].filter((p): p is { lat: number; lng: number; name: string; exempt: "endpoint" } => p !== null);
 
     // Collect transit step data needed for GTFS lookup
     type TransitStepInput = {
@@ -406,7 +408,14 @@ function MapContent() {
             stops: { lat: number; lng: number; name: string }[];
           };
           if (data.stops.length > 0) {
-            const allPoints = [...endpoints, ...data.stops];
+            // Mark rail/major-exchange stops as exempt from proximity dedup.
+            // TransLink GTFS names all SkyTrain stations and bus exchanges
+            // with " Station" suffix; regular bus stops never use that pattern.
+            const taggedStops = data.stops.map((s) => ({
+              ...s,
+              exempt: /\bstation\b/i.test(s.name) ? ("station" as const) : undefined,
+            }));
+            const allPoints = [...endpoints, ...taggedStops];
             console.group(`[ride-n-dine] Route ${routeIndex} — GTFS stop points (${allPoints.length} total)`);
             console.table(
               allPoints.map((p, i) => ({
@@ -418,11 +427,7 @@ function MapContent() {
               })),
             );
             console.groupEnd();
-            searchRestaurants(
-              allPoints,
-              turfFilterDistance,
-              routeIndex,
-            );
+            searchRestaurants(allPoints, routeIndex,);
             return;
           } else {
             console.warn(`[ride-n-dine] Route ${routeIndex} — GTFS returned 0 stops, falling back to polyline sampling`);
@@ -442,7 +447,7 @@ function MapContent() {
     if (transitPolyline.length > 0) {
       const fallbackPoints = computeSearchPoints(transitPolyline, {
         searchIntervalKm: fallbackSearchInterval,
-        apiSearchRadiusM: apiSearchRadius,
+        apiSearchRadiusM: searchRadius,
       });
       const allPoints = [...endpoints, ...fallbackPoints];
       console.group(`[ride-n-dine] Route ${routeIndex} — fallback polyline sample points (${allPoints.length} total)`);
@@ -456,11 +461,7 @@ function MapContent() {
         })),
       );
       console.groupEnd();
-      searchRestaurants(
-        allPoints,
-        turfFilterDistance,
-        routeIndex,
-      );
+      searchRestaurants(allPoints, routeIndex,);
       return;
     }
 
@@ -468,15 +469,11 @@ function MapContent() {
     const fullPolyline = extractPolylineCoordinates(route);
     const lastResortPoints = computeSearchPoints(fullPolyline, {
       searchIntervalKm: fallbackSearchInterval,
-      apiSearchRadiusM: apiSearchRadius,
+      apiSearchRadiusM: searchRadius,
     });
     const allLastResort = [...endpoints, ...lastResortPoints];
     console.warn(`[ride-n-dine] Route ${routeIndex} — last-resort full polyline sample (${allLastResort.length} points)`);
-    searchRestaurants(
-      allLastResort,
-      turfFilterDistance,
-      routeIndex,
-    );
+    searchRestaurants(allLastResort, routeIndex,);
   };
 
   // Handler: User selects a route from the alternatives
@@ -494,8 +491,7 @@ function MapContent() {
   };
 
   const searchRestaurants = async (
-    stopPoints: { lat: number; lng: number; name?: string }[],
-    filterDistance: number,
+    stopPoints: { lat: number; lng: number; name?: string; exempt?: "endpoint" | "station" }[],
     routeIndex: number,
   ) => {
     const searchId = ++activeRestaurantSearchIdRef.current;
@@ -518,23 +514,50 @@ function MapContent() {
       }, remainingMs);
     };
 
-    // Deduplicate stops that are within one search radius of each other to
-    // avoid redundant API calls, then cap at the server's 25-point limit.
-    const minSpacingKm = (apiSearchRadius / 1000) * 0.9;
-    const deduped: { lat: number; lng: number; name?: string }[] = [];
+    // Dedup strategy:
+    //  • "endpoint" stops (origin/destination) — always kept.
+    //  • "station" stops (SkyTrain / exchange stations) — kept unless an
+    //    endpoint is within STATION_ENDPOINT_DEDUP_M (e.g. the user's
+    //    destination IS the station; no need for a second overlapping circle).
+    //  • Unmarked stops (bus stops) — dropped if any already-accepted stop is
+    //    within BUS_DEDUP_M to collapse same-block stops without touching stations.
+    const BUS_DEDUP_M = 150;
+    const STATION_ENDPOINT_DEDUP_M = 300;
+
+    const distM = (
+      a: { lat: number; lng: number },
+      b: { lat: number; lng: number },
+    ) => {
+      const dLat = (a.lat - b.lat) * 111_320;
+      const dLng =
+        (a.lng - b.lng) * 111_320 * Math.cos(b.lat * (Math.PI / 180));
+      return Math.sqrt(dLat * dLat + dLng * dLng);
+    };
+
+    const endpointPoints = stopPoints.filter((s) => s.exempt === "endpoint");
+    const deduped: typeof stopPoints = [];
+
     for (const stop of stopPoints) {
-      const tooClose = deduped.some((existing) => {
-        const d = turf.distance(
-          turf.point([stop.lng, stop.lat]),
-          turf.point([existing.lng, existing.lat]),
-          { units: "kilometers" },
+      if (stop.exempt === "endpoint") {
+        deduped.push(stop);
+        continue;
+      }
+
+      if (stop.exempt === "station") {
+        // Skip if very close to an endpoint — the endpoint circle covers it.
+        const nearEndpoint = endpointPoints.some(
+          (ep) => distM(stop, ep) < STATION_ENDPOINT_DEDUP_M,
         );
-        return d < minSpacingKm;
-      });
+        if (!nearEndpoint) deduped.push(stop);
+        continue;
+      }
+
+      // Regular bus stop — skip if too close to any already-accepted stop.
+      const tooClose = deduped.some((existing) => distM(stop, existing) < BUS_DEDUP_M);
       if (!tooClose) deduped.push(stop);
     }
 
-    // If still over the limit, spread evenly across the list
+    // If over the server limit, spread evenly so the whole route is covered.
     const MAX_POINTS = 25;
     let searchPoints = deduped;
     if (deduped.length > MAX_POINTS) {
@@ -545,7 +568,7 @@ function MapContent() {
     }
 
     console.group(
-      `[ride-n-dine] Route ${routeIndex} — final search circles after dedup (${searchPoints.length} of ${stopPoints.length})`,
+      `[ride-n-dine] Route ${routeIndex} — search circles (${searchPoints.length} of ${stopPoints.length} stops)`,
     );
     console.table(
       searchPoints.map((sp, i) => ({
@@ -559,7 +582,7 @@ function MapContent() {
 
     const circles: SearchCircle[] = searchPoints.map((sp) => ({
       center: { lat: sp.lat, lng: sp.lng },
-      radius: turfFilterDistance,
+      radius: searchRadius,
       name: sp.name,
     }));
     setSearchCircleCache((prev) => ({ ...prev, [routeIndex]: circles }));
@@ -570,7 +593,7 @@ function MapContent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           points: searchPoints,
-          radius: apiSearchRadius,
+          radius: searchRadius,
         }),
       });
 
@@ -585,12 +608,9 @@ function MapContent() {
       }
 
       const data = (await response.json()) as { places: PlaceSearchResult[] };
-      // Filter against searchPoints (the deduplicated set that has visible circles),
-      // not the raw stopPoints — this keeps displayed restaurants inside the circles.
       processAllResults(
         data.places,
         searchPoints,
-        filterDistance,
         routeIndex,
         searchId,
         finishRestaurantSearch,
@@ -608,7 +628,6 @@ function MapContent() {
   const processAllResults = (
     results: PlaceSearchResult[],
     stopPoints: { lat: number; lng: number }[],
-    filterDistance: number,
     routeIndex: number,
     searchId: number,
     finishRestaurantSearch: (searchId: number) => void,
@@ -618,23 +637,12 @@ function MapContent() {
     }
 
     const validStops = stopPoints.filter(
-      (s) =>
-        typeof s.lat === "number" &&
-        typeof s.lng === "number" &&
-        !isNaN(s.lat) &&
-        !isNaN(s.lng),
+      (s) => typeof s.lat === "number" && !isNaN(s.lat) &&
+             typeof s.lng === "number" && !isNaN(s.lng),
     );
 
-    if (validStops.length === 0) {
-      console.error("No valid stop points for restaurant filtering");
-      finishRestaurantSearch(searchId);
-      return;
-    }
-
-    // Pre-compute Turf points for each stop (avoids re-creating inside the loop)
-    const stopTurfPoints = validStops.map((s) => turf.point([s.lng, s.lat]));
-
-    // Filter and transform restaurants
+    // Transform restaurants — no distance gate, the API search radius is the
+    // single source of truth for what counts as "near a stop".
     const restaurants = results
       .map((place): Restaurant | null => {
         // Filter out hotels and lodging
@@ -663,35 +671,31 @@ function MapContent() {
           return null;
         }
 
-        try {
-          // Distance = metres to the nearest transit stop
-          const restaurantPoint = turf.point([lng, lat]);
-          let minDistance = Infinity;
-          for (const stopPoint of stopTurfPoints) {
-            const d = turf.distance(restaurantPoint, stopPoint, {
-              units: "meters",
-            });
-            if (d < minDistance) minDistance = d;
-          }
-
-          if (minDistance > filterDistance) {
-            return null;
-          }
-
-          return {
-            placeId: place.place_id || "",
-            name: place.name || "Unknown Restaurant",
-            location: { lat, lng },
-            distanceFromRoute: Math.round(minDistance),
-            types: place.types || [],
-            rating: place.rating,
-            userRatingsTotal: place.user_ratings_total,
-            priceLevel: place.price_level,
-            vicinity: place.vicinity,
-          };
-        } catch {
-          return null;
+        // Straight-line distance to nearest stop in metres.
+        // Equirectangular approximation — accurate to <0.5% for distances
+        // under 400 m, no library needed.
+        let minDistance = Infinity;
+        for (const stop of validStops) {
+          const dLat = (lat - stop.lat) * 111_320;
+          const dLng =
+            (lng - stop.lng) *
+            111_320 *
+            Math.cos(stop.lat * (Math.PI / 180));
+          const d = Math.sqrt(dLat * dLat + dLng * dLng);
+          if (d < minDistance) minDistance = d;
         }
+
+        return {
+          placeId: place.place_id || "",
+          name: place.name || "Unknown Restaurant",
+          location: { lat, lng },
+          distanceFromRoute: Math.round(minDistance),
+          types: place.types || [],
+          rating: place.rating,
+          userRatingsTotal: place.user_ratings_total,
+          priceLevel: place.price_level,
+          vicinity: place.vicinity,
+        };
       })
       .filter((restaurant): restaurant is Restaurant => restaurant !== null);
 
@@ -771,6 +775,7 @@ function MapContent() {
         <RestaurantSidebar
           variant="desktop"
           restaurants={restaurants}
+          isSearching={isSearchingRestaurants && selectedRouteIndex !== null}
           onRestaurantClick={setSelectedRestaurant}
         />
 
@@ -854,3 +859,4 @@ export default function Home() {
     </APIProvider>
   );
 }
+
