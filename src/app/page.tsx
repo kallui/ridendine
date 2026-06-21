@@ -469,7 +469,7 @@ function MapContent() {
     const fullPolyline = extractPolylineCoordinates(route);
     const lastResortPoints = computeSearchPoints(fullPolyline, {
       searchIntervalKm: fallbackSearchInterval,
-      searchRadiusM: searchRadius,
+      apiSearchRadiusM: searchRadius,
     });
     const allLastResort = [...endpoints, ...lastResortPoints];
     console.warn(`[ride-n-dine] Route ${routeIndex} — last-resort full polyline sample (${allLastResort.length} points)`);
