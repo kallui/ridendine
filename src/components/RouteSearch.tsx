@@ -105,10 +105,14 @@ export default function RouteSearch({
     userLocation,
   });
 
+
   // When the parent re-provides an origin label (e.g. after a search completed),
-  // switch to the full form so the user can edit both fields.
+  // switch to the full form and sync the input so the field isn't empty on expand.
   useEffect(() => {
-    if (defaultOrigin) setPhase("both");
+    if (!defaultOrigin) return;
+    setPhase("both");
+    originAC.setInput(defaultOrigin);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [defaultOrigin]);
 
   // Focus the destination input programmatically rather than using autoFocus.
@@ -411,70 +415,161 @@ export default function RouteSearch({
           className="p-2.5 sm:p-4 flex flex-col gap-2"
           onSubmit={handleSubmit}
         >
-          <div className="flex gap-3 items-center">
-            {/* Destination diamond icon */}
-            <div className="flex items-center justify-center shrink-0 w-4">
-              <div className="w-3 h-3 bg-text-primary rotate-45 rounded-sm" />
-            </div>
+          {userLocation ? (
+            /* ── Has GPS: show locked "Current location" origin + dest ── */
+            <div className="flex gap-3">
+              {/* Route line indicator */}
+              <div className="flex flex-col items-center py-2.5 shrink-0 w-4">
+                <div className="w-2.5 h-2.5 rounded-full border-2 border-text-secondary shrink-0" />
+                <div className="w-px flex-1 bg-border my-1.5" />
+                <div className="w-3 h-3 bg-text-primary rotate-45 rounded-sm shrink-0" />
+              </div>
 
-            <div className="relative flex-1">
-              <input
-                ref={destInputRef}
-                type="text"
-                autoComplete="off"
-                placeholder="Where to?"
-                value={destAC.input}
-                onChange={handleDestChange}
-                onFocus={() => setFocusedField("destination")}
-                onBlur={() => setFocusedField(null)}
-                onKeyDown={handleDestKeyDown}
-                className={`w-full pl-4 py-2 sm:py-2.5 border border-border rounded-md
-                  bg-app-bg text-text-primary placeholder:text-text-muted
-                  focus:outline-none focus:ring-2 focus:ring-accent-ring/70
-                  ${destAC.input ? "pr-8" : "pr-4"}`}
-              />
-              {destAC.input && (
+              <div className="flex-1 flex flex-col gap-2">
+                {/* Origin — read-only "Current location" chip */}
                 <button
                   type="button"
-                  onMouseDown={(e) => { e.preventDefault(); handleClearDest(); }}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-text-primary transition-colors"
-                  aria-label="Clear destination"
+                  onClick={() => {
+                    originAC.setInput("Current Location");
+                    setPhase("both");
+                    setTimeout(() => originInputRef.current?.focus(), 60);
+                  }}
+                  className="w-full text-left pl-3 pr-3 py-2 sm:py-2.5 border border-border rounded-md bg-app-bg/60 text-text-secondary text-sm flex items-center gap-1.5 hover:bg-app-bg hover:border-text-muted transition-colors group"
+                  title="Click to change starting point"
                 >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  <svg className="w-3 h-3 shrink-0 text-primary" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                  </svg>
+                  <span className="flex-1 truncate">Current location</span>
+                  <svg className="w-3 h-3 shrink-0 opacity-0 group-hover:opacity-40 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2.414a2 2 0 01.586-1.414z" />
                   </svg>
                 </button>
-              )}
-              <AnimatePresence>
-                {showDestDropdown && (
-                  <PredictionList
-                    predictions={destAC.predictions}
-                    activeIndex={destAC.activeIndex}
-                    onSelect={selectDestPrediction}
-                    onHover={(i) => destAC.setActiveIndex(i)}
-                    onLeave={() => destAC.setActiveIndex(null)}
-                  />
-                )}
-              </AnimatePresence>
-            </div>
-          </div>
 
-          {/* "From your current location" hint */}
-          {userLocation ? (
-            <div className="flex items-center gap-1.5 pl-7 text-xs text-text-muted">
-              <svg className="w-3 h-3 shrink-0" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
-              </svg>
-              From your current location
+                {/* Destination */}
+                <div className="relative">
+                  <input
+                    ref={destInputRef}
+                    type="text"
+                    autoComplete="off"
+                    placeholder="Where to?"
+                    value={destAC.input}
+                    onChange={handleDestChange}
+                    onFocus={() => setFocusedField("destination")}
+                    onBlur={() => setFocusedField(null)}
+                    onKeyDown={handleDestKeyDown}
+                    className={`w-full pl-4 py-2 sm:py-2.5 border border-border rounded-md
+                      bg-app-bg text-text-primary placeholder:text-text-muted
+                      focus:outline-none focus:ring-2 focus:ring-accent-ring/70
+                      ${destAC.input ? "pr-14" : "pr-9"}`}
+                  />
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
+                    {destAC.input && (
+                      <button
+                        type="button"
+                        onMouseDown={(e) => { e.preventDefault(); handleClearDest(); }}
+                        className="p-1 text-text-muted hover:text-text-primary transition-colors"
+                        aria-label="Clear destination"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
+                    <button
+                      type="submit"
+                      className="p-1 text-text-muted hover:text-text-primary transition-colors"
+                      aria-label="Search"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
+                    </button>
+                  </div>
+                  <AnimatePresence>
+                    {showDestDropdown && (
+                      <PredictionList
+                        predictions={destAC.predictions}
+                        activeIndex={destAC.activeIndex}
+                        onSelect={selectDestPrediction}
+                        onHover={(i) => destAC.setActiveIndex(i)}
+                        onLeave={() => destAC.setActiveIndex(null)}
+                      />
+                    )}
+                  </AnimatePresence>
+                </div>
+              </div>
             </div>
           ) : (
-            <button
-              type="button"
-              onClick={() => setPhase("both")}
-              className="pl-7 text-xs text-text-muted hover:text-text-primary transition-colors text-left"
-            >
-              + Add starting point manually
-            </button>
+            /* ── No GPS: single "Where to?" with manual origin option ── */
+            <>
+              <div className="flex gap-3 items-center">
+                {/* Destination diamond icon */}
+                <div className="flex items-center justify-center shrink-0 w-4">
+                  <div className="w-3 h-3 bg-text-primary rotate-45 rounded-sm" />
+                </div>
+
+                <div className="relative flex-1">
+                  <input
+                    ref={destInputRef}
+                    type="text"
+                    autoComplete="off"
+                    placeholder="Where to?"
+                    value={destAC.input}
+                    onChange={handleDestChange}
+                    onFocus={() => setFocusedField("destination")}
+                    onBlur={() => setFocusedField(null)}
+                    onKeyDown={handleDestKeyDown}
+                    className={`w-full pl-4 py-2 sm:py-2.5 border border-border rounded-md
+                      bg-app-bg text-text-primary placeholder:text-text-muted
+                      focus:outline-none focus:ring-2 focus:ring-accent-ring/70
+                      ${destAC.input ? "pr-14" : "pr-9"}`}
+                  />
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
+                    {destAC.input && (
+                      <button
+                        type="button"
+                        onMouseDown={(e) => { e.preventDefault(); handleClearDest(); }}
+                        className="p-1 text-text-muted hover:text-text-primary transition-colors"
+                        aria-label="Clear destination"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
+                    <button
+                      type="submit"
+                      className="p-1 text-text-muted hover:text-text-primary transition-colors"
+                      aria-label="Search"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
+                    </button>
+                  </div>
+                  <AnimatePresence>
+                    {showDestDropdown && (
+                      <PredictionList
+                        predictions={destAC.predictions}
+                        activeIndex={destAC.activeIndex}
+                        onSelect={selectDestPrediction}
+                        onHover={(i) => destAC.setActiveIndex(i)}
+                        onLeave={() => destAC.setActiveIndex(null)}
+                      />
+                    )}
+                  </AnimatePresence>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setPhase("both")}
+                className="pl-7 text-xs text-text-muted hover:text-text-primary transition-colors text-left"
+              >
+                + Add starting point manually
+              </button>
+            </>
           )}
 
           {searchBlockedMessage && (
@@ -559,20 +654,31 @@ export default function RouteSearch({
                     className={`w-full pl-4 py-2 sm:py-2.5 border border-border rounded-md
                       bg-app-bg text-text-primary placeholder:text-text-muted
                       focus:outline-none focus:ring-2 focus:ring-accent-ring/70
-                      ${destAC.input ? "pr-8" : "pr-4"}`}
+                      ${destAC.input ? "pr-14" : "pr-9"}`}
                   />
-                  {destAC.input && (
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
+                    {destAC.input && (
+                      <button
+                        type="button"
+                        onMouseDown={(e) => { e.preventDefault(); handleClearDest(); }}
+                        className="p-1 text-text-muted hover:text-text-primary transition-colors"
+                        aria-label="Clear destination"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
                     <button
-                      type="button"
-                      onMouseDown={(e) => { e.preventDefault(); handleClearDest(); }}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-text-primary transition-colors"
-                      aria-label="Clear destination"
+                      type="submit"
+                      className="p-1 text-text-muted hover:text-text-primary transition-colors"
+                      aria-label="Search"
                     >
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                       </svg>
                     </button>
-                  )}
+                  </div>
                   <AnimatePresence>
                     {showDestDropdown && (
                       <PredictionList

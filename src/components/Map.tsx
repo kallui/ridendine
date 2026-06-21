@@ -59,7 +59,7 @@ export default function Map({
   centerCoordinate,
   zoomLevel,
   mapId,
-  colorScheme,
+  colorScheme = "DARK",
   routes,
   selectedRouteIndex,
   restaurants,
@@ -119,7 +119,8 @@ export default function Map({
         if (segment.path.length < 2) continue;
 
         if (segment.travelMode === "WALKING") {
-          // Dashed gray line for walking segments
+          // Dotted line for walking — white on dark maps, dark on light maps
+          const walkingDotColor = colorScheme === "DARK" ? "#FFFFFF" : "#1E293B";
           polylinesRef.current.push(
             new google.maps.Polyline({
               path: segment.path,
@@ -130,13 +131,13 @@ export default function Map({
                 {
                   icon: {
                     path: "M 0,-1 0,1",
-                    strokeOpacity: 0.75,
-                    strokeColor: "#6B7280",
-                    strokeWeight: 2.5,
-                    scale: 3,
+                    strokeOpacity: 1,
+                    strokeColor: walkingDotColor,
+                    strokeWeight: 3,
+                    scale: 4,
                   },
                   offset: "0",
-                  repeat: "14px",
+                  repeat: "18px",
                 },
               ],
               zIndex: 2,
@@ -191,7 +192,7 @@ export default function Map({
       transitBadgesRef.current.forEach((m) => m.setMap(null));
       transitBadgesRef.current = [];
     };
-  }, [map, routes, selectedRouteIndex]);
+  }, [map, routes, selectedRouteIndex, colorScheme]);
 
   useEffect(() => {
     if (!map || routes.length === 0 || selectedRestaurant) return;
