@@ -9,6 +9,7 @@ import BottomSheet from "@/components/BottomSheet";
 import { getRouteHeadline } from "@/components/RouteOptionCard";
 import { APIProvider } from "@vis.gl/react-google-maps";
 import { useState, useEffect, useRef } from "react";
+import { useThemeMode } from "@/hooks/useThemeMode";
 import {
   formatCommuteLimitMessage,
   isRouteWithinCommuteLimits,
@@ -49,10 +50,8 @@ export type SearchCircle = {
   name?: string;
 };
 
-type ThemeMode = "light" | "dark";
-
 function MapContent() {
-  const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
+  const { themeMode, toggleTheme } = useThemeMode();
   const [originLabel, setOriginLabel] = useState("");
   const [destinationLabel, setDestinationLabel] = useState("");
   const [userLocation, setUserLocation] =
@@ -98,34 +97,6 @@ function MapContent() {
   const [isBottomSheetExpanded, setIsBottomSheetExpanded] = useState(false);
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
 
-  // Theme: system-aware default + persistent manual toggle
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const saved = window.localStorage.getItem("ride-n-dine-theme");
-    if (saved === "light" || saved === "dark") {
-      setThemeMode(saved);
-      document.documentElement.setAttribute("data-theme", saved);
-      return;
-    }
-
-    const prefersDark = window.matchMedia(
-      "(prefers-color-scheme: dark)",
-    ).matches;
-    const initialMode: ThemeMode = prefersDark ? "dark" : "light";
-    setThemeMode(initialMode);
-    document.documentElement.setAttribute("data-theme", initialMode);
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    document.documentElement.setAttribute("data-theme", themeMode);
-    window.localStorage.setItem("ride-n-dine-theme", themeMode);
-  }, [themeMode]);
-
-  const toggleTheme = () => {
-    setThemeMode((prev) => (prev === "dark" ? "light" : "dark"));
-  };
 
   // Request user location on mount (only once)
   useEffect(() => {

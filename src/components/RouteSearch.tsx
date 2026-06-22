@@ -79,7 +79,7 @@ export default function RouteSearch({
   collapsed = false,
   onExpand,
   searchCount = 0,
-  dailyLimit = 10,
+  dailyLimit = 5,
   dailyLimitReached = false,
 }: RouteSearchProps) {
   const skipNextAutoSearchRef = useRef(false);
