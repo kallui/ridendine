@@ -64,6 +64,7 @@ function MapContent() {
     dailyLimitReached,
     count: searchCount,
     dailyLimit,
+    resetAt,
     recordSearch,
     markLimitReached,
   } = useRouteSearchGuards();
@@ -238,10 +239,22 @@ function MapContent() {
       }
 
       if (!response.ok) {
-        // Sync client counter to max when the server says the limit is reached,
-        // so the UI immediately reflects the blocked state on the next render.
-        if (response.status === 429) markLimitReached();
-        setRouteError(await parseApiError(response));
+        if (response.status === 429) {
+          // Parse the body once to get both the user message and the reset time.
+          try {
+            const body = (await response.json()) as {
+              message?: string;
+              retryAfter?: number;
+            };
+            markLimitReached(body.retryAfter);
+            setRouteError(body.message ?? "Daily limit reached. Try again later.");
+          } catch {
+            markLimitReached();
+            setRouteError("Daily limit reached. Try again later.");
+          }
+        } else {
+          setRouteError(await parseApiError(response));
+        }
         setIsSearchExpanded(true);
         return;
       }
@@ -729,6 +742,7 @@ function MapContent() {
           searchCount={searchCount}
           dailyLimit={dailyLimit}
           dailyLimitReached={dailyLimitReached}
+          limitResetAt={resetAt}
         />
         {routes.length > 0 && (
           <div className="hidden lg:block flex-1 min-h-0">

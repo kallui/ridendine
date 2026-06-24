@@ -12,6 +12,7 @@ import {
   incrementSearchCount,
   isDailyLimitReached,
   readSearchCount,
+  RESET_AT_KEY,
   ROUTE_SEARCH_COOLDOWN_MS,
   todayKey,
 } from "@/lib/client/search-guards-core";
@@ -26,12 +27,15 @@ const DEV_BYPASS =
 export function useRouteSearchGuards() {
   const [count, setCount] = useState(0);
   const [cooldownActive, setCooldownActive] = useState(false);
+  const [resetAt, setResetAt] = useState<number | null>(null);
   const cooldownRef = useRef<number | null>(null);
 
   // Runs only on the client after hydration — sessionStorage is not available on the server.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setCount(readSearchCount(sessionStorage));
+    const stored = sessionStorage.getItem(RESET_AT_KEY);
+    if (stored) setResetAt(Number(stored));
   }, []);
 
   useEffect(() => {
@@ -58,12 +62,18 @@ export function useRouteSearchGuards() {
   /**
    * Call this when the server returns 429 so the client counter syncs to
    * the limit immediately, instead of drifting below the real server value.
+   * Pass retryAfterSec from the Retry-After response to store the reset time.
    */
-  const markLimitReached = useCallback(() => {
+  const markLimitReached = useCallback((retryAfterSec?: number) => {
     if (DEV_BYPASS) return;
     sessionStorage.setItem(COUNT_KEY, String(DAILY_ROUTE_SEARCH_LIMIT));
     sessionStorage.setItem(DATE_KEY, todayKey());
     setCount(DAILY_ROUTE_SEARCH_LIMIT);
+    if (retryAfterSec != null) {
+      const ts = Date.now() + retryAfterSec * 1000;
+      sessionStorage.setItem(RESET_AT_KEY, String(ts));
+      setResetAt(ts);
+    }
   }, []);
 
   return {
@@ -71,6 +81,7 @@ export function useRouteSearchGuards() {
     dailyLimitReached,
     count,
     dailyLimit: DEV_BYPASS ? 0 : DAILY_ROUTE_SEARCH_LIMIT,
+    resetAt,
     recordSearch,
     markLimitReached,
   };

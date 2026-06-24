@@ -22,6 +22,7 @@ interface RouteSearchProps {
   searchCount?: number;
   dailyLimit?: number;
   dailyLimitReached?: boolean;
+  limitResetAt?: number | null;
 }
 
 // Defined outside RouteSearch so React doesn't create a new component type on every render.
@@ -68,6 +69,17 @@ function PredictionList({
   );
 }
 
+function formatResetCountdown(resetAt: number): string {
+  const diffMs = resetAt - Date.now();
+  if (diffMs <= 0) return "resetting soon";
+  const totalMins = Math.ceil(diffMs / 60_000);
+  const hrs = Math.floor(totalMins / 60);
+  const mins = totalMins % 60;
+  if (hrs > 0 && mins > 0) return `resets in ${hrs}h ${mins}m`;
+  if (hrs > 0) return `resets in ${hrs}h`;
+  return `resets in ${mins}m`;
+}
+
 export default function RouteSearch({
   onSearch,
   isLoading,
@@ -81,10 +93,23 @@ export default function RouteSearch({
   searchCount = 0,
   dailyLimit = 5,
   dailyLimitReached = false,
+  limitResetAt = null,
 }: RouteSearchProps) {
   const skipNextAutoSearchRef = useRef(false);
   const originInputRef = useRef<HTMLInputElement>(null);
   const destInputRef = useRef<HTMLInputElement>(null);
+
+  const [countdown, setCountdown] = useState<string>(() =>
+    limitResetAt ? formatResetCountdown(limitResetAt) : "",
+  );
+  useEffect(() => {
+    if (!limitResetAt || !dailyLimitReached) return;
+    setCountdown(formatResetCountdown(limitResetAt));
+    const id = window.setInterval(() => {
+      setCountdown(formatResetCountdown(limitResetAt));
+    }, 30_000);
+    return () => window.clearInterval(id);
+  }, [limitResetAt, dailyLimitReached]);
   const [focusedField, setFocusedField] = useState<
     "origin" | "destination" | null
   >(null);
@@ -750,7 +775,7 @@ export default function RouteSearch({
             }`}
           >
             {dailyLimitReached
-              ? "Daily limit reached · resets tomorrow"
+              ? `Daily limit reached · ${countdown || "resets in ~24h"}`
               : `${searchCount}/${dailyLimit} searches today`}
           </span>
         </div>

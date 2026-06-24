@@ -175,3 +175,81 @@ body {
 .pac-icon {
   display: none;
 }
+
+/* ===================================
+   MDX / About page prose styles
+   =================================== */
+.mdx-content h1,
+.mdx-content h2,
+.mdx-content h3 {
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-top: 2.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.mdx-content h1 {
+  font-size: 1.5rem;
+}
+
+.mdx-content h2 {
+  font-size: 1.125rem;
+}
+
+.mdx-content h3 {
+  font-size: 1rem;
+}
+
+.mdx-content h1:first-child,
+.mdx-content h2:first-child,
+.mdx-content h3:first-child {
+  margin-top: 0;
+}
+
+.mdx-content p {
+  color: var(--text-secondary);
+  line-height: 1.7;
+  margin-bottom: 0.75rem;
+  font-size: 0.9375rem;
+}
+
+.mdx-content ol {
+  counter-reset: step-counter;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.mdx-content ol li {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  color: var(--text-secondary);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  counter-increment: step-counter;
+}
+
+.mdx-content ol li::before {
+  content: counter(step-counter);
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 9999px;
+  background: var(--accent);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.mdx-content li strong,
+.mdx-content p strong {
+  font-weight: 600;
+  color: var(--text-primary);
+}
