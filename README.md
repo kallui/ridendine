@@ -1,4 +1,4 @@
-# Ride'N'Dine
+# RideNDine
 
 A progressive web app (PWA) that helps commuters discover restaurants and food stops along their transit route.
 
@@ -6,7 +6,7 @@ A progressive web app (PWA) that helps commuters discover restaurants and food s
 
 ## What It Does
 
-Enter an origin and destination, pick a transit route, and Ride'N'Dine surfaces nearby restaurants along the way. No detours, no guesswork — just food that fits your commute.
+Enter an origin and destination, pick a transit route, and RideNDine surfaces nearby restaurants along the way. No detours, no guesswork — just food that fits your commute.
 
 ## Tech Stack
 
@@ -21,7 +21,7 @@ Enter an origin and destination, pick a transit route, and Ride'N'Dine surfaces 
 
 ## Architecture
 
-Ride'N'Dine uses a **polyline-based filtering approach** to keep API costs low:
+RideNDine uses a **polyline-based filtering approach** to keep API costs low:
 
 1. Fetch the transit route from the **Directions API** (1 call)
 2. Run a single **Places API Nearby Search** within the route bounding box (1–2 calls)

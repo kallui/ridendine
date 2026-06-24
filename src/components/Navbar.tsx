@@ -13,7 +13,7 @@ export default function Navbar({ themeMode, onToggleTheme }: NavbarProps) {
         <Link href="/" className="flex items-center opacity-90 hover:opacity-100 transition-opacity">
           <Image
             src="/logo-64.png"
-            alt="Ride'N'Dine"
+            alt="RideNDine"
             width={48}
             height={48}
             className="h-12 w-12"

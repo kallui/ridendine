@@ -189,7 +189,14 @@ body {
 }
 
 .mdx-content h1 {
-  font-size: 1.5rem;
+  font-size: 1.875rem;
+  margin-bottom: 0.5rem;
+}
+
+.mdx-content h1 + p {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  margin-bottom: 0;
 }
 
 .mdx-content h2 {

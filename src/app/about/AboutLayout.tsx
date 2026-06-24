@@ -38,12 +38,6 @@ export default function AboutLayout({
             </svg>
             Back to app
           </Link>
-          <h1 className="text-3xl font-bold text-text-primary mb-2">
-            About Ride&apos;N&apos;Dine
-          </h1>
-          <p className="text-text-muted text-sm">
-            A small tool for commuters who are also hungry.
-          </p>
         </div>
 
         {/* MDX content */}

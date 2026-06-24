@@ -1,4 +1,4 @@
-# Copilot Instructions for Ride'N'Dine Project
+# Copilot Instructions for RideNDine Project
 
 ## Learning Approach
 
