@@ -44,26 +44,33 @@ export default function AboutLayout({
         <div className="mdx-content mb-10">{children}</div>
 
         {/* Footer */}
-        <div className="border-t border-border pt-8 flex items-center justify-between">
-          <p className="text-text-muted text-sm">
+        <div className="border-t border-border pt-8 flex items-center justify-between text-[0.9375rem]">
+          <p className="text-text-muted">
             -{" "}
-            <a
-              href="https://github.com/kallui"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-brand hover:text-brand-hover transition-colors"
-            >
-              kallui
-            </a>
+            <span className="inline-flex items-center gap-1">
+              <a
+                href="https://github.com/kallui"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-brand hover:text-brand-hover transition-colors"
+              >
+                kallui
+              </a>
+              <span
+                className="kiki-mascot"
+                role="img"
+                aria-label="Kiki"
+              />
+            </span>
           </p>
           <a
             href="https://github.com/kallui/ride-n-dine"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 text-sm text-text-secondary hover:text-text-primary transition-colors"
+            className="inline-flex items-center gap-2 text-text-secondary hover:text-text-primary transition-colors"
           >
             <svg
-              className="h-5 w-5"
+              className="h-[1.1em] w-[1.1em]"
               viewBox="0 0 24 24"
               fill="currentColor"
               aria-hidden="true"
