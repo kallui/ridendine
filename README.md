@@ -1,54 +1,50 @@
-# Ride'N'Dine
+# RideNDine
 
-A progressive web app (PWA) that helps commuters discover restaurants and food stops along their transit route.
+Your commute has better food than you think.
 
-> **Status:** Work in progress — not yet public.
+## The problem
 
-## What It Does
+RideNDine started from my own commute.
 
-Enter an origin and destination, pick a transit route, and Ride'N'Dine surfaces nearby restaurants along the way. No detours, no guesswork — just food that fits your commute.
+When I started a new job in a different city, I found myself spending hours on transit every day without knowing what food options were available along my route. After work, I would often want to grab dinner on the way home, but finding places that made sense for my commute meant searching for restaurants around different stops and figuring out which ones were actually convenient to reach.
 
-## Tech Stack
+Google Maps already makes it easy for drivers to find restaurants along their route. For transit commuters, finding food stops that fit naturally into their journey often requires checking stops and nearby restaurants one by one. I built RideNDine to make those discoveries easier.
 
-| Layer      | Technology                                         |
-| ---------- | -------------------------------------------------- |
-| Framework  | Next.js 15 (App Router)                            |
-| Language   | TypeScript                                         |
-| Styling    | Tailwind CSS v4                                    |
-| Maps       | Google Maps via `@vis.gl/react-google-maps` v1.7.1 |
-| Geospatial | Turf.js (`@turf/turf`)                             |
-| PWA        | `next-pwa`                                         |
+## How it works
 
-## Architecture
+1. **Enter your route** — Enter your starting point and destination to plan your trip.
+2. **Pick your route** — Choose the transit option that works best for you.
+3. **Explore food options along the way** — The app finds food spots within a 5-minute walk of your transit path. Filter by rating or price, and tap any pin on the map for details.
+4. **Open in Google Maps** — Found somewhere you like? Tap the card to open the place directly in Google Maps and get walking directions.
 
-Ride'N'Dine uses a **polyline-based filtering approach** to keep API costs low:
+## Best experience in Metro Vancouver
 
-1. Fetch the transit route from the **Directions API** (1 call)
-2. Run a single **Places API Nearby Search** within the route bounding box (1–2 calls)
-3. Filter results **client-side** using Turf.js — restaurants within 500 m of the route polyline
-4. Display filtered restaurants as map markers with a sortable/filterable sidebar
+RideNDine works best in Metro Vancouver, where it uses TransLink transit data to identify exact bus stops and train stations along your route. This allows food options to be discovered based on real transit stops instead of just nearby areas.
 
-This keeps usage to ~2–3 API calls per search, supporting roughly 3,000–5,000 route searches per month on the free tier.
+Outside Metro Vancouver, RideNDine still works by estimating food options along your route, but results may vary depending on available transit data.
 
-## Getting Started
+## Usage limits
 
-### Prerequisites
+Each session gets **5 route searches per 24 hours** to keep running the app sustainable as a personal project.
 
-- Node.js 18+
-- A [Google Maps Platform](https://developers.google.com/maps) API key with the following APIs enabled:
-  - Maps JavaScript API
-  - Directions API
-  - Places API
+---
 
-### Environment Variables
+## Tech stack
 
-Create a `.env.local` file in the project root:
+| Layer      | Technology                                  |
+| ---------- | ------------------------------------------- |
+| Framework  | Next.js 15 (App Router)                     |
+| Language   | TypeScript                                  |
+| Styling    | Tailwind CSS v4                             |
+| Maps       | Google Maps via `@vis.gl/react-google-maps` |
+| Geospatial | Turf.js (`@turf/turf`)                      |
+| PWA        | `next-pwa`                                  |
 
-```
-NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your_api_key_here
-```
+## To run locally:
 
-### Running Locally
+**Prerequisites:** Node.js 18+, Google Maps API key (Maps JavaScript, Directions, Places)
+
+Create `.env.local` by following `.env.local.template` and fill out all the required API keys.
 
 ```bash
 npm install
@@ -56,26 +52,3 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
-
-## Project Structure
-
-```
-src/
-  app/            # Next.js App Router (layout, page, globals)
-  components/     # UI components (Map, Sidebar, RouteSearch, etc.)
-  hooks/          # Custom React hooks
-docs/
-  ARCHITECTURE.md # API strategy and cost analysis
-  KANBAN.md       # Project task board
-  LEARNING_PATH.md
-```
-
-## Docs
-
-- [Architecture & API strategy](docs/ARCHITECTURE.md)
-- [Project Kanban board](docs/KANBAN.md)
-- [Learning path](docs/LEARNING_PATH.md)
-
-## Deployment
-
-The app is deployed on [Vercel](https://vercel.com). Add `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` as an environment variable in your Vercel project settings and restrict the API key to your Vercel domain in the Google Cloud Console.

@@ -13,12 +13,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Ride'N'Dine",
+  title: "RideNDine",
   description: "Discover restaurants and food stops along your commute route.",
   icons: {
-    icon: [
-      { url: "/icons/favicon-196.png", sizes: "196x196", type: "image/png" },
-    ],
+    icon: [{ url: "/logo-64.png", sizes: "64x64", type: "image/png" }],
     apple: [
       { url: "/icons/apple-icon-180.png", sizes: "180x180", type: "image/png" },
     ],

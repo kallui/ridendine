@@ -1,4 +1,4 @@
-# Ride'N'Dine - Project Kanban Board
+# RideNDine - Project Kanban Board
 
 Last Updated: March 19, 2026 (session 5)
 
@@ -56,7 +56,7 @@ Last Updated: March 19, 2026 (session 5)
 - [x] Removed grey drag pill from bottom sheet handle bar; chevron now centered at top
 - [x] Fixed content bleeding through gap between handle bar and sticky header — refactored to proper `flex-col` layout (header `shrink-0` + list `overflow-y-auto`) instead of CSS sticky trick
 - [x] Removed test button (Crowley Dr → WorkSafeBC Richmond) from desktop
-- [x] Removed desktop Search button; replaced with `Ride'N'Dine` logo text above inputs
+- [x] Removed desktop Search button; replaced with `RideNDine` logo text above inputs
 - [x] Search icon (🔍) now visible consistently on all screen sizes inside destination input
 - [x] RouteSelectionPanel desktop card now matches RouteSearch card styling exactly (same bg, border, shadow, padding)
 - [x] Shifted mobile/desktop breakpoint from `sm` (640px) to `lg` (1024px) — tablets now use bottom sheet layout

@@ -5,6 +5,7 @@ import {
 
 export const COUNT_KEY = "rnd_searches";
 export const DATE_KEY = "rnd_searches_date";
+export const RESET_AT_KEY = "rnd_reset_at";
 
 export function todayKey(now = new Date()): string {
   return now.toISOString().slice(0, 10);

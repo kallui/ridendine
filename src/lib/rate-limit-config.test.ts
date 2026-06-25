@@ -53,7 +53,7 @@ describe("formatCommuteLimitMessage", () => {
 });
 
 describe("DAILY_ROUTE_SEARCH_LIMIT", () => {
-  it("is 10 searches per day", () => {
-    expect(DAILY_ROUTE_SEARCH_LIMIT).toBe(10);
+  it("is 5 searches per day", () => {
+    expect(DAILY_ROUTE_SEARCH_LIMIT).toBe(5);
   });
 });
