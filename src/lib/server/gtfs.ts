@@ -1,5 +1,6 @@
 import RBush from "rbush";
 import { unzipSync } from "fflate";
+import { formatStopName } from "@/lib/format-stop-name";
 
 const GTFS_URL =
   "https://gtfs-static.translink.ca/gtfs/google_transit.zip";
@@ -16,7 +17,7 @@ interface RBushStopItem {
   stopId: string;
 }
 
-export type TransitStopPoint = { lat: number; lng: number; name: string };
+export type TransitStopPoint = { lat: number; lng: number; name: string; routeShortName?: string };
 
 type GtfsIndex = {
   /** stop_id → location + name */
@@ -356,11 +357,18 @@ export function getStopsBetween(
   index: GtfsIndex,
   step: TransitStepInput,
 ): TransitStopPoint[] {
-  const toPoints = (stopIds: string[]): TransitStopPoint[] =>
+  const toPoints = (stopIds: string[], routeShortName?: string): TransitStopPoint[] =>
     stopIds
-      .map((id) => {
+      .map((id): TransitStopPoint | null => {
         const s = index.stops.get(id);
-        return s ? { lat: s.lat, lng: s.lng, name: s.name } : null;
+        if (!s) return null;
+        const point: TransitStopPoint = {
+          lat: s.lat,
+          lng: s.lng,
+          name: formatStopName(s.name),
+        };
+        if (routeShortName !== undefined) point.routeShortName = routeShortName;
+        return point;
       })
       .filter((s): s is TransitStopPoint => s !== null);
 
@@ -379,7 +387,7 @@ export function getStopsBetween(
       console.log(
         `[GTFS] "${step.routeShortName}" matched exactly → ${stopIds.length} stops`,
       );
-      return toPoints(stopIds);
+      return toPoints(stopIds, step.routeShortName);
     }
   }
 
@@ -410,7 +418,7 @@ export function getStopsBetween(
         console.log(
           `[GTFS] "${step.routeShortName}" matched via fuzzy name → ${stopIds.length} stops`,
         );
-        return toPoints(stopIds);
+        return toPoints(stopIds, step.routeShortName);
       }
     }
   }
@@ -430,7 +438,7 @@ export function getStopsBetween(
         console.log(
           `[GTFS] "${step.routeShortName}" matched via full route scan → ${arr.idx - dep.idx + 1} stops`,
         );
-        return toPoints(stopIds.slice(dep.idx, arr.idx + 1));
+        return toPoints(stopIds.slice(dep.idx, arr.idx + 1), step.routeShortName);
       }
     }
   }

@@ -17,11 +17,12 @@ Google Maps already makes it easy for drivers to find restaurants along their ro
 3. **Explore food options along the way** — The app finds food spots within a 5-minute walk of your transit path. Filter by rating or price, and tap any pin on the map for details.
 4. **Open in Google Maps** — Found somewhere you like? Tap the card to open the place directly in Google Maps and get walking directions.
 
-## Best experience in Metro Vancouver
+## How it finds restaurants
 
-RideNDine works best in Metro Vancouver, where it uses TransLink transit data to identify exact bus stops and train stations along your route. This allows food options to be discovered based on real transit stops instead of just nearby areas.
-
-Outside Metro Vancouver, RideNDine still works by estimating food options along your route, but results may vary depending on available transit data.
+- **Metro Vancouver** — Uses TransLink GTFS to place search circles at real bus stops and train stations along your route.
+- **Everywhere else** — Samples your transit path every 500 m when stop-level data isn’t available.
+- **Search area** — Each circle covers about a 5-minute walk (~400 m). Results from overlapping circles are merged so the same restaurant doesn’t show up twice.
+- **Limits** — Up to 25 search points per route to keep Google Places API usage reasonable.
 
 ## Usage limits
 

@@ -6,8 +6,8 @@ import {
   AdvancedMarker,
   Pin,
 } from "@vis.gl/react-google-maps";
-import { useEffect, useRef } from "react";
-import { Restaurant, SearchCircle } from "@/app/page";
+import { useEffect, useRef, useMemo } from "react";
+import { Restaurant, SearchCircle, StopGroup } from "@/app/page";
 import {
   getRouteBoundsPoints,
   buildRoutePath,
@@ -49,6 +49,9 @@ interface MapProps {
   selectedRouteIndex: number | null;
   restaurants: Restaurant[];
   searchCircles: SearchCircle[];
+  stopGroups: StopGroup[];
+  selectedStopIndex?: number | null;
+  onStopClick?: (stopIndex: number) => void;
   showBounds: boolean;
   selectedRestaurant: Restaurant | null;
   onSelectRestaurant: (restaurant: Restaurant | null) => void;
@@ -64,6 +67,8 @@ export default function Map({
   selectedRouteIndex,
   restaurants,
   searchCircles,
+  selectedStopIndex,
+  onStopClick,
   showBounds,
   selectedRestaurant,
   onSelectRestaurant,
@@ -76,15 +81,16 @@ export default function Map({
   const stopMarkersRef = useRef<google.maps.Marker[]>([]);
   const infoWindowRef = useRef<google.maps.InfoWindow | null>(null);
 
+  // ── Pan to selected restaurant ───────────────────────────────────────────
+
   useEffect(() => {
     if (!map || !selectedRestaurant) return;
     map.panTo(selectedRestaurant.location);
     map.setZoom(17);
   }, [map, selectedRestaurant]);
 
-  // Draw route polylines directly (REST directions JSON does not render via DirectionsRenderer).
-  // Selected route: per-segment (dashed walking, solid blue transit + mode badges).
-  // Non-selected routes: single gray line.
+  // ── Route polylines + transit badges ─────────────────────────────────────
+
   useEffect(() => {
     if (!map) return;
 
@@ -113,13 +119,11 @@ export default function Map({
         return;
       }
 
-      // Selected route — render each step individually
       const segments = getRouteSegments(route);
       for (const segment of segments) {
         if (segment.path.length < 2) continue;
 
         if (segment.travelMode === "WALKING") {
-          // Dotted line for walking — white on dark maps, dark on light maps
           const walkingDotColor = colorScheme === "DARK" ? "#FFFFFF" : "#1E293B";
           polylinesRef.current.push(
             new google.maps.Polyline({
@@ -145,7 +149,6 @@ export default function Map({
             }),
           );
         } else {
-          // Solid blue line for transit segments
           polylinesRef.current.push(
             new google.maps.Polyline({
               path: segment.path,
@@ -158,7 +161,6 @@ export default function Map({
             }),
           );
 
-          // Mode badge (B / S / R / T) at the boarding stop
           if (segment.departureLocation) {
             transitBadgesRef.current.push(
               new google.maps.Marker({
@@ -193,6 +195,8 @@ export default function Map({
       transitBadgesRef.current = [];
     };
   }, [map, routes, selectedRouteIndex, colorScheme]);
+
+  // ── Fit bounds ────────────────────────────────────────────────────────────
 
   useEffect(() => {
     if (!map || routes.length === 0 || selectedRestaurant) return;
@@ -230,6 +234,8 @@ export default function Map({
     map.fitBounds(bounds, fitPadding);
   }, [map, routes, selectedRouteIndex]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Search circles + stop dot markers ────────────────────────────────────
+
   useEffect(() => {
     if (!map) return;
 
@@ -254,20 +260,20 @@ export default function Map({
         return circle;
       });
 
-      // Small dot at each stop center — hover shows name, click opens label
-      stopMarkersRef.current = searchCircles.map((searchCircle) => {
+      stopMarkersRef.current = searchCircles.map((searchCircle, idx) => {
+        const isSelected = selectedStopIndex === idx;
         const marker = new google.maps.Marker({
           position: searchCircle.center,
           map,
-          zIndex: 3,
+          zIndex: isSelected ? 6 : 3,
           title: searchCircle.name,
           icon: {
             path: google.maps.SymbolPath.CIRCLE,
-            scale: 5,
-            fillColor: "#FFFFFF",
+            scale: isSelected ? 8 : 5,
+            fillColor: isSelected ? "#2563EB" : "#FFFFFF",
             fillOpacity: 1,
             strokeColor: "#2563EB",
-            strokeWeight: 2,
+            strokeWeight: isSelected ? 3 : 2,
           },
         });
 
@@ -282,11 +288,21 @@ export default function Map({
             infoWindowRef.current.open({ map, anchor: marker });
           };
           marker.addListener("mouseover", openLabel);
-          marker.addListener("click", openLabel);
-          marker.addListener("mouseout", () =>
-            infoWindowRef.current?.close(),
-          );
+          marker.addListener("mouseout", () => infoWindowRef.current?.close());
         }
+
+        marker.addListener("click", () => {
+          if (searchCircle.name) {
+            if (!infoWindowRef.current) {
+              infoWindowRef.current = new google.maps.InfoWindow();
+            }
+            infoWindowRef.current.setContent(
+              `<span style="font-size:13px;font-weight:500;padding:2px 4px">${searchCircle.name}</span>`,
+            );
+            infoWindowRef.current.open({ map, anchor: marker });
+          }
+          onStopClick?.(idx);
+        });
 
         return marker;
       });
@@ -299,7 +315,29 @@ export default function Map({
       stopMarkersRef.current.forEach((m) => m.setMap(null));
       stopMarkersRef.current = [];
     };
-  }, [map, searchCircles, showBounds, onMapClick]);
+  }, [map, searchCircles, showBounds, onMapClick, onStopClick, selectedStopIndex]);
+
+  // ── Smart restaurant marker set ───────────────────────────────────────────
+  // Default: show the top 2-3 restaurants per stop (by rating × log(reviews)).
+  // When a stop is selected: show all its restaurants; dim top picks elsewhere.
+
+  const topRestaurantIds = useMemo(() => {
+    const ids = new Set<string>();
+    const byStop: Record<number, Restaurant[]> = {};
+    for (const r of restaurants) {
+      if (!byStop[r.nearestStopIndex]) byStop[r.nearestStopIndex] = [];
+      byStop[r.nearestStopIndex].push(r);
+    }
+    for (const rests of Object.values(byStop)) {
+      const sorted = [...rests].sort(
+        (a, b) =>
+          (b.rating ?? 0) * Math.log((b.userRatingsTotal ?? 0) + 1) -
+          (a.rating ?? 0) * Math.log((a.userRatingsTotal ?? 0) + 1),
+      );
+      sorted.slice(0, 3).forEach((r) => ids.add(r.placeId));
+    }
+    return ids;
+  }, [restaurants]);
 
   const markerRoute =
     selectedRouteIndex !== null && routes[selectedRouteIndex]
@@ -330,19 +368,38 @@ export default function Map({
         </AdvancedMarker>
       )}
 
-      {restaurants.map((restaurant) => (
-        <AdvancedMarker
-          key={restaurant.placeId}
-          position={restaurant.location}
-          onClick={() => onSelectRestaurant(restaurant)}
-        >
-          <Pin
-            background={"#EF4444"}
-            borderColor={"#991B1B"}
-            glyphColor={"#FEE2E2"}
-          />
-        </AdvancedMarker>
-      ))}
+      {restaurants.map((restaurant) => {
+        const isSelectedStop =
+          selectedStopIndex !== null &&
+          restaurant.nearestStopIndex === selectedStopIndex;
+        const isTopMarker = topRestaurantIds.has(restaurant.placeId);
+
+        // Hide this marker if it's not a top pick and its stop isn't selected.
+        if (!isTopMarker && !isSelectedStop) return null;
+
+        const isDimmed =
+          selectedStopIndex !== null && !isSelectedStop;
+
+        return (
+          <AdvancedMarker
+            key={restaurant.placeId}
+            position={restaurant.location}
+            zIndex={isSelectedStop ? 10 : 5}
+            onClick={() => onSelectRestaurant(restaurant)}
+          >
+            <Pin
+              background={
+                isDimmed ? "#9CA3AF" : isSelectedStop ? "#F97316" : "#EF4444"
+              }
+              borderColor={
+                isDimmed ? "#6B7280" : isSelectedStop ? "#C2410C" : "#991B1B"
+              }
+              glyphColor={isDimmed ? "#E5E7EB" : "#FEE2E2"}
+              scale={isSelectedStop ? 1.2 : 1}
+            />
+          </AdvancedMarker>
+        );
+      })}
 
       {selectedRestaurant && (
         <RestaurantMarkerPopup

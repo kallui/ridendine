@@ -1,6 +1,7 @@
 import { Restaurant } from "@/app/page";
 
-// Helper function to render star rating
+// ── Star rating ──────────────────────────────────────────────────────────────
+
 export function renderStars(rating?: number, uid?: string) {
   if (!rating) return null;
 
@@ -11,7 +12,6 @@ export function renderStars(rating?: number, uid?: string) {
 
   return (
     <div className="flex items-center gap-0.5">
-      {/* Full stars */}
       {Array.from({ length: fullStars }).map((_, i) => (
         <svg
           key={`full-${i}`}
@@ -21,7 +21,6 @@ export function renderStars(rating?: number, uid?: string) {
           <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
         </svg>
       ))}
-      {/* Half star */}
       {hasHalfStar && (
         <svg
           className="w-4 h-4 text-yellow-400"
@@ -40,7 +39,6 @@ export function renderStars(rating?: number, uid?: string) {
           />
         </svg>
       )}
-      {/* Empty stars */}
       {Array.from({ length: emptyStars }).map((_, i) => (
         <svg
           key={`empty-${i}`}
@@ -54,30 +52,33 @@ export function renderStars(rating?: number, uid?: string) {
   );
 }
 
-// Helper function to format review count
 export function formatReviewCount(count?: number) {
   if (!count) return null;
   return count >= 1000 ? `${(count / 1000).toFixed(1)}k` : count.toString();
 }
 
-// Helper function to render price level
-export function renderPriceLevel(priceLevel?: number) {
-  if (priceLevel === undefined || priceLevel === null) return null;
+// ── Detour badge ─────────────────────────────────────────────────────────────
 
-  const dollarSigns = "$".repeat(priceLevel || 1);
-  const grayDollars = "$".repeat(4 - (priceLevel || 1));
-
-  return (
-    <div className="flex items-center">
-      <span className="text-green-600 font-semibold text-sm">
-        {dollarSigns}
+export function DetourBadge({ minutes }: { minutes: number }) {
+  if (minutes === 0) {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs font-medium text-green-600 dark:text-green-400">
+        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+        </svg>
+        No detour
       </span>
-      <span className="text-gray-300 text-sm">{grayDollars}</span>
-    </div>
+    );
+  }
+  return (
+    <span className="text-xs font-medium text-text-secondary">
+      +{minutes} min detour
+    </span>
   );
 }
 
-// Shared restaurant details component
+// ── Shared restaurant details ─────────────────────────────────────────────────
+
 interface RestaurantDetailsProps {
   restaurant: Restaurant;
   variant?: "card" | "infowindow";
@@ -87,66 +88,81 @@ interface RestaurantDetailsProps {
 export function RestaurantDetails({
   restaurant,
   variant = "card",
-  onClick,
 }: RestaurantDetailsProps) {
   const isCard = variant === "card";
 
   if (isCard) {
-    // Compact single-row: 4.7 ★★★★☆ (371) · $$ · 22m
+    // Compact single-row: 4.7 ★★★★☆ (371) · +2 min detour
     return (
       <div className="flex flex-col gap-0.5">
         <div className="flex items-center gap-1.5 flex-wrap">
           {restaurant.rating && (
-            <span className="text-xs font-semibold text-text-primary">{restaurant.rating.toFixed(1)}</span>
+            <span className="text-xs font-semibold text-text-primary">
+              {restaurant.rating.toFixed(1)}
+            </span>
           )}
           {renderStars(restaurant.rating, restaurant.placeId)}
           {restaurant.userRatingsTotal && (
-            <span className="text-xs text-text-muted">({formatReviewCount(restaurant.userRatingsTotal)})</span>
-          )}
-          {restaurant.priceLevel !== undefined && (
-            <>
-              <span className="text-text-muted text-xs">·</span>
-              {renderPriceLevel(restaurant.priceLevel)}
-            </>
+            <span className="text-xs text-text-muted">
+              ({formatReviewCount(restaurant.userRatingsTotal)})
+            </span>
           )}
           <span className="text-text-muted text-xs">·</span>
-          <span className="text-xs text-text-muted">{restaurant.distanceFromRoute}m from route</span>
+          <DetourBadge minutes={restaurant.detourMinutes} />
         </div>
         {restaurant.vicinity && (
-          <p className="text-xs text-text-muted line-clamp-1">{restaurant.vicinity}</p>
+          <p className="text-xs text-text-muted line-clamp-1">
+            {restaurant.vicinity}
+          </p>
         )}
       </div>
     );
   }
 
+  // infowindow variant — more spacious, shown in the map popup
   return (
     <>
-      {(restaurant.rating || restaurant.priceLevel !== undefined) && (
-        <div className="flex items-center gap-3 mb-2 flex-wrap">
-          <div className="flex items-center gap-2">
-            {restaurant.rating && (
-              <span className="text-sm font-semibold text-text-primary">
-                {restaurant.rating.toFixed(1)}
-              </span>
-            )}
-            {renderStars(restaurant.rating, restaurant.placeId)}
-            {restaurant.userRatingsTotal && (
-              <span className="text-sm text-gray-500">
-                ({formatReviewCount(restaurant.userRatingsTotal)})
-              </span>
-            )}
-          </div>
-          {renderPriceLevel(restaurant.priceLevel)}
+      {restaurant.rating && (
+        <div className="flex items-center gap-2 mb-2 flex-wrap">
+          <span className="text-sm font-semibold text-text-primary">
+            {restaurant.rating.toFixed(1)}
+          </span>
+          {renderStars(restaurant.rating, restaurant.placeId)}
+          {restaurant.userRatingsTotal && (
+            <span className="text-sm text-gray-500">
+              ({formatReviewCount(restaurant.userRatingsTotal)})
+            </span>
+          )}
         </div>
       )}
 
-      {/* Distance from Route */}
+      {/* Detour */}
       <div className="flex items-center gap-2 mb-2">
         <svg
           className="w-4 h-4 text-gray-400 flex-shrink-0"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+          />
+        </svg>
+        <DetourBadge minutes={restaurant.detourMinutes} />
+      </div>
+
+      {/* Nearest stop */}
+      <div className="flex items-center gap-2 mb-2">
+        <svg
+          className="w-4 h-4 text-gray-400 flex-shrink-0"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
         >
           <path
             strokeLinecap="round"
@@ -162,19 +178,26 @@ export function RestaurantDetails({
           />
         </svg>
         <p className="text-sm text-gray-300">
-          <span className="font-medium">{restaurant.distanceFromRoute}m</span>{" "}
-          from route
+          Near{" "}
+          <span className="font-medium text-text-primary">
+            {restaurant.nearestStopName}
+          </span>
+          {restaurant.transitLineName && (
+            <span className="ml-1 text-xs text-text-muted">
+              ({restaurant.transitLineName})
+            </span>
+          )}
         </p>
       </div>
 
-      {/* Address (if available) */}
+      {/* Address */}
       {restaurant.vicinity && (
         <p className="text-xs text-gray-400 mb-3 line-clamp-2">
           {restaurant.vicinity}
         </p>
       )}
 
-      {/* Google Maps Link */}
+      {/* Google Maps link */}
       <a
         href={`https://www.google.com/maps/search/?api=1&query=Google&query_place_id=${restaurant.placeId}`}
         target="_blank"

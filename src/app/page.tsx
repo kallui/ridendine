@@ -8,7 +8,7 @@ import RouteSelectionPanel from "@/components/RouteSelectionPanel";
 import BottomSheet from "@/components/BottomSheet";
 import { getRouteHeadline } from "@/components/RouteOptionCard";
 import { APIProvider } from "@vis.gl/react-google-maps";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useThemeMode } from "@/hooks/useThemeMode";
 import {
   formatCommuteLimitMessage,
@@ -31,6 +31,7 @@ import {
 import { isWithinMetroVancouver } from "@/lib/geo-bounds";
 import type { PlaceSearchResult } from "@/lib/places-types";
 import { computeSearchPoints } from "@/lib/route-sampling";
+import { formatStopName } from "@/lib/format-stop-name";
 
 export type Restaurant = {
   placeId: string;
@@ -40,8 +41,21 @@ export type Restaurant = {
   types: string[];
   rating?: number; // 1.0 to 5.0
   userRatingsTotal?: number; // Number of reviews
-  priceLevel?: number; // 0 to 4 (0=free, 1=$, 2=$$, 3=$$$, 4=$$$$)
+  priceLevel?: number; // 0 to 4 — kept for API compat, not displayed
   vicinity?: string; // Short address like "123 Main St, San Francisco"
+  nearestStopName: string;
+  nearestStopIndex: number; // route-order index into the searchCircles array
+  detourMinutes: number; // walking time from the nearest stop (~80 m/min)
+  transitLineName?: string; // "99", "Expo Line", etc.
+};
+
+export type StopGroup = {
+  stopName: string;
+  stopIndex: number;
+  center: google.maps.LatLngLiteral;
+  restaurants: Restaurant[]; // sorted by detourMinutes asc
+  isTransfer: boolean; // user changes transit line at this stop
+  transitLineName?: string;
 };
 
 export type SearchCircle = {
@@ -91,6 +105,7 @@ function MapContent() {
   const showBounds = true;
   const [selectedRestaurant, setSelectedRestaurant] =
     useState<Restaurant | null>(null);
+  const [selectedStopIndex, setSelectedStopIndex] = useState<number | null>(null);
   const activeDirectionsRequestIdRef = useRef(0);
   const activeRestaurantSearchIdRef = useRef(0);
 
@@ -133,6 +148,7 @@ function MapContent() {
     if (selectedRouteIndex !== null) {
       setIsBottomSheetExpanded(false);
     }
+    setSelectedStopIndex(null);
   }, [selectedRouteIndex]);
 
   // Derived: restaurants/circles for the currently selected route (or empty if none selected)
@@ -144,6 +160,51 @@ function MapContent() {
     selectedRouteIndex !== null
       ? (searchCircleCache[selectedRouteIndex] ?? [])
       : [];
+
+  // Group restaurants by their nearest stop, in route order, to feed the
+  // accordion sidebar and the smart map marker filter.
+  const stopGroups = useMemo((): StopGroup[] => {
+    if (restaurants.length === 0 || searchCircles.length === 0) return [];
+
+    const grouped: Record<number, Restaurant[]> = {};
+    for (const r of restaurants) {
+      if (!grouped[r.nearestStopIndex]) grouped[r.nearestStopIndex] = [];
+      grouped[r.nearestStopIndex].push(r);
+    }
+
+    const groups: StopGroup[] = [];
+    for (const [stopIndexStr, rests] of Object.entries(grouped)) {
+      const stopIndex = parseInt(stopIndexStr, 10);
+      const circle = searchCircles[stopIndex];
+      if (!circle) continue;
+      const transitLineName = rests.find((r) => r.transitLineName)?.transitLineName;
+      groups.push({
+        stopName: circle.name ?? `Stop ${stopIndex + 1}`,
+        stopIndex,
+        center: circle.center,
+        restaurants: [...rests].sort((a, b) => a.detourMinutes - b.detourMinutes),
+        isTransfer: false,
+        transitLineName,
+      });
+    }
+
+    groups.sort((a, b) => a.stopIndex - b.stopIndex);
+
+    // A stop is a transfer when the transit line changes from the previous stop.
+    for (let i = 1; i < groups.length; i++) {
+      const prev = groups[i - 1];
+      const curr = groups[i];
+      if (
+        curr.transitLineName &&
+        prev.transitLineName &&
+        curr.transitLineName !== prev.transitLineName
+      ) {
+        curr.isTransfer = true;
+      }
+    }
+
+    return groups;
+  }, [restaurants, searchCircles]);
 
   // === MAP CONFIG ===
   const mapId =
@@ -389,7 +450,7 @@ function MapContent() {
         });
         if (response.ok) {
           const data = (await response.json()) as {
-            stops: { lat: number; lng: number; name: string }[];
+            stops: { lat: number; lng: number; name: string; routeShortName?: string }[];
           };
           if (data.stops.length > 0) {
             // Mark rail/major-exchange stops as exempt from proximity dedup.
@@ -567,9 +628,13 @@ function MapContent() {
     const circles: SearchCircle[] = searchPoints.map((sp) => ({
       center: { lat: sp.lat, lng: sp.lng },
       radius: searchRadius,
-      name: sp.name,
+      name: sp.name ? formatStopName(sp.name) : undefined,
     }));
     setSearchCircleCache((prev) => ({ ...prev, [routeIndex]: circles }));
+
+    // Tag each search point with its route-order index so restaurants can
+    // track which stop they belong to. This index aligns with searchCircles[i].
+    const indexedStopPoints = searchPoints.map((sp, i) => ({ ...sp, stopIndex: i }));
 
     try {
       const response = await fetch("/api/places/nearby", {
@@ -594,7 +659,7 @@ function MapContent() {
       const data = (await response.json()) as { places: PlaceSearchResult[] };
       processAllResults(
         data.places,
-        searchPoints,
+        indexedStopPoints,
         routeIndex,
         searchId,
         finishRestaurantSearch,
@@ -611,7 +676,7 @@ function MapContent() {
 
   const processAllResults = (
     results: PlaceSearchResult[],
-    stopPoints: { lat: number; lng: number }[],
+    stopPoints: { lat: number; lng: number; name?: string; stopIndex: number; routeShortName?: string }[],
     routeIndex: number,
     searchId: number,
     finishRestaurantSearch: (searchId: number) => void,
@@ -655,10 +720,11 @@ function MapContent() {
           return null;
         }
 
-        // Straight-line distance to nearest stop in metres.
-        // Equirectangular approximation — accurate to <0.5% for distances
-        // under 400 m, no library needed.
+        // Straight-line distance to nearest stop in metres, and track which
+        // stop is nearest so we can group restaurants by stop.
+        // Equirectangular approximation — accurate to <0.5% under 400 m.
         let minDistance = Infinity;
+        let nearestStop: (typeof validStops)[0] | null = null;
         for (const stop of validStops) {
           const dLat = (lat - stop.lat) * 111_320;
           const dLng =
@@ -666,19 +732,30 @@ function MapContent() {
             111_320 *
             Math.cos(stop.lat * (Math.PI / 180));
           const d = Math.sqrt(dLat * dLat + dLng * dLng);
-          if (d < minDistance) minDistance = d;
+          if (d < minDistance) {
+            minDistance = d;
+            nearestStop = stop;
+          }
         }
+
+        const distanceFromRoute = Math.round(minDistance);
 
         return {
           placeId: place.place_id || "",
           name: place.name || "Unknown Restaurant",
           location: { lat, lng },
-          distanceFromRoute: Math.round(minDistance),
+          distanceFromRoute,
           types: place.types || [],
           rating: place.rating,
           userRatingsTotal: place.user_ratings_total,
           priceLevel: place.price_level,
           vicinity: place.vicinity,
+          nearestStopName: formatStopName(
+            nearestStop?.name ?? `Stop ${(nearestStop?.stopIndex ?? 0) + 1}`,
+          ),
+          nearestStopIndex: nearestStop?.stopIndex ?? 0,
+          detourMinutes: Math.round(distanceFromRoute / 80),
+          transitLineName: nearestStop?.routeShortName,
         };
       })
       .filter((restaurant): restaurant is Restaurant => restaurant !== null);
@@ -705,10 +782,13 @@ function MapContent() {
           selectedRouteIndex={selectedRouteIndex}
           restaurants={restaurants}
           searchCircles={searchCircles}
+          stopGroups={stopGroups}
+          selectedStopIndex={selectedStopIndex}
+          onStopClick={setSelectedStopIndex}
           showBounds={showBounds}
           selectedRestaurant={selectedRestaurant}
           onSelectRestaurant={setSelectedRestaurant}
-          onMapClick={() => { setIsBottomSheetExpanded(false); setSelectedRestaurant(null); }}
+          onMapClick={() => { setIsBottomSheetExpanded(false); setSelectedRestaurant(null); setSelectedStopIndex(null); }}
         />
       </div>
 
@@ -760,6 +840,9 @@ function MapContent() {
         <RestaurantSidebar
           variant="desktop"
           restaurants={restaurants}
+          stopGroups={stopGroups}
+          selectedStopIndex={selectedStopIndex}
+          onStopClick={setSelectedStopIndex}
           isSearching={isSearchingRestaurants && selectedRouteIndex !== null}
           onRestaurantClick={setSelectedRestaurant}
         />
@@ -817,6 +900,9 @@ function MapContent() {
                     <RestaurantSidebar
                       variant="sheet"
                       restaurants={restaurants}
+                      stopGroups={stopGroups}
+                      selectedStopIndex={selectedStopIndex}
+                      onStopClick={setSelectedStopIndex}
                       onBack={() => setSelectedRouteIndex(null)}
                       routeHeadline={
                         selectedRouteIndex !== null
