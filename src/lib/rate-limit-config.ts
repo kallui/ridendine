@@ -19,10 +19,10 @@ export const ROUTE_SEARCH_COOLDOWN_MS = 3_000;
 export const AUTOCOMPLETE_DEBOUNCE_MS = 400;
 
 /** Reject routes longer than this — keeps the app commute-focused. */
-export const MAX_COMMUTE_MINUTES = 60;
+export const MAX_COMMUTE_MINUTES = 90;
 
 /** Reject routes farther than this (straight-line trip distance from Google). */
-export const MAX_ROUTE_DISTANCE_KM = 35;
+export const MAX_ROUTE_DISTANCE_KM = 45;
 
 export const SESSION_COOKIE_NAME = "rid_session";
 
