@@ -70,6 +70,7 @@ export async function POST(request: Request) {
       routes,
       geocoded_waypoints: data.geocoded_waypoints,
       request: data.request,
+      rateLimitReset: rateLimit.reset,
     });
   } catch (error) {
     console.error("Directions API error:", error);

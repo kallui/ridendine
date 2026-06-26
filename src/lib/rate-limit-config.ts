@@ -8,8 +8,12 @@
 /** Max route searches per user per day. */
 export const DAILY_ROUTE_SEARCH_LIMIT = 5;
 
+/** Rolling window before the search limit resets (server-side). */
+// Prod: use 24 * 60 * 60 * 1000 (24 hours)
+export const ROUTE_SEARCH_WINDOW_MS = 24 * 60 * 60 * 1000 // Testing20 * 1000;
+
 /** Minimum ms between route searches (prevents accidental double-submit). */
-export const ROUTE_SEARCH_COOLDOWN_MS = 8_000;
+export const ROUTE_SEARCH_COOLDOWN_MS = 3_000;
 
 /** Autocomplete debounce. */
 export const AUTOCOMPLETE_DEBOUNCE_MS = 400;

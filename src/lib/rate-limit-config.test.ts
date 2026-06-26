@@ -5,6 +5,7 @@ import {
   isRouteWithinCommuteLimits,
   MAX_COMMUTE_MINUTES,
   MAX_ROUTE_DISTANCE_KM,
+  ROUTE_SEARCH_WINDOW_MS,
 } from "@/lib/rate-limit-config";
 import { createRoute } from "@/test/fixtures/directions-route";
 
@@ -55,5 +56,11 @@ describe("formatCommuteLimitMessage", () => {
 describe("DAILY_ROUTE_SEARCH_LIMIT", () => {
   it("is 5 searches per day", () => {
     expect(DAILY_ROUTE_SEARCH_LIMIT).toBe(5);
+  });
+});
+
+describe("ROUTE_SEARCH_WINDOW_MS", () => {
+  it("defaults to 24 hours", () => {
+    expect(ROUTE_SEARCH_WINDOW_MS).toBe(24 * 60 * 60 * 1000);
   });
 });

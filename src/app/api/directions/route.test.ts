@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { DAILY_ROUTE_SEARCH_LIMIT } from "@/lib/rate-limit-config";
+import { DAILY_ROUTE_SEARCH_LIMIT, ROUTE_SEARCH_WINDOW_MS } from "@/lib/rate-limit-config";
 import { createDirectionsApiFailure, createDirectionsApiResponse } from "@/test/fixtures/directions-api-response";
 import { createLongRoute, createRoute } from "@/test/fixtures/directions-route";
 import { createJsonRequest } from "@/test/fixtures/request-helpers";
@@ -35,7 +35,7 @@ describe("POST /api/directions", () => {
       success: true,
       limit: DAILY_ROUTE_SEARCH_LIMIT,
       remaining: DAILY_ROUTE_SEARCH_LIMIT - 1,
-      reset: Date.now() + 86_400_000,
+      reset: Date.now() + ROUTE_SEARCH_WINDOW_MS,
     });
     fetchDirections.mockResolvedValue(createDirectionsApiResponse());
     rateLimitResponse.mockImplementation(() =>
@@ -70,7 +70,7 @@ describe("POST /api/directions", () => {
       success: false,
       limit: DAILY_ROUTE_SEARCH_LIMIT,
       remaining: 0,
-      reset: Date.now() + 86_400_000,
+      reset: Date.now() + ROUTE_SEARCH_WINDOW_MS,
     });
 
     const response = await POST(
@@ -135,6 +135,7 @@ describe("POST /api/directions", () => {
     const body = await response.json();
     expect(body.routes).toHaveLength(1);
     expect(body.routes[0]).toEqual(shortRoute);
+    expect(body.rateLimitReset).toBeGreaterThan(Date.now());
     expect(checkRouteSearchLimit).toHaveBeenCalledWith("1.2.3.4:session-123");
   });
 });

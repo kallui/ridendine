@@ -325,6 +325,7 @@ function MapContent() {
         routes: google.maps.DirectionsRoute[];
         geocoded_waypoints?: google.maps.DirectionsGeocodedWaypoint[];
         request?: google.maps.DirectionsRequest;
+        rateLimitReset?: number;
       };
 
       if (data.status !== "OK" || !data.routes?.length) {
@@ -355,7 +356,7 @@ function MapContent() {
       }
 
       setRouteError(null);
-      recordSearch();
+      recordSearch(data.rateLimitReset);
       setDirectionsResult(
         normalizeDirectionsResult(
           { ...data, routes: limitedRoutes },

@@ -71,13 +71,20 @@ function PredictionList({
 
 function formatResetCountdown(resetAt: number): string {
   const diffMs = resetAt - Date.now();
-  if (diffMs <= 0) return "resetting soon";
-  const totalMins = Math.ceil(diffMs / 60_000);
-  const hrs = Math.floor(totalMins / 60);
-  const mins = totalMins % 60;
-  if (hrs > 0 && mins > 0) return `resets in ${hrs}h ${mins}m`;
-  if (hrs > 0) return `resets in ${hrs}h`;
-  return `resets in ${mins}m`;
+  if (diffMs <= 0) return "Resetting soon";
+
+  // Floor each unit — ceil was rounding 23h 59m 1s up to "24h 0m".
+  const hrs = Math.floor(diffMs / 3_600_000);
+  const mins = Math.floor((diffMs % 3_600_000) / 60_000);
+  const secs = Math.floor((diffMs % 60_000) / 1000);
+
+  if (hrs > 0) return `${hrs}h ${mins}m until reset`;
+  if (mins > 0) return `${mins}m until reset`;
+  return `${secs}s until reset`;
+}
+
+function countdownTickMs(resetAt: number): number {
+  return resetAt - Date.now() > 60_000 ? 60_000 : 1_000;
 }
 
 export default function RouteSearch({
@@ -103,13 +110,15 @@ export default function RouteSearch({
     limitResetAt ? formatResetCountdown(limitResetAt) : "",
   );
   useEffect(() => {
-    if (!limitResetAt || !dailyLimitReached) return;
-    setCountdown(formatResetCountdown(limitResetAt));
-    const id = window.setInterval(() => {
+    if (!limitResetAt) return;
+    let timeoutId: number;
+    const tick = () => {
       setCountdown(formatResetCountdown(limitResetAt));
-    }, 30_000);
-    return () => window.clearInterval(id);
-  }, [limitResetAt, dailyLimitReached]);
+      timeoutId = window.setTimeout(tick, countdownTickMs(limitResetAt));
+    };
+    tick();
+    return () => window.clearTimeout(timeoutId);
+  }, [limitResetAt]);
   const [focusedField, setFocusedField] = useState<
     "origin" | "destination" | null
   >(null);
@@ -387,6 +396,7 @@ export default function RouteSearch({
 
   const originDisplayLabel =
     defaultOrigin === "Current Location" ? "Current location" : defaultOrigin;
+  const searchesLeft = dailyLimit - searchCount;
 
   return (
     <div className="bg-card-bg rounded-lg shadow-lg flex flex-col border border-border">
@@ -753,31 +763,42 @@ export default function RouteSearch({
         </form>
       )}
 
-      {searchCount > 0 && (
-        <div className="flex items-center gap-2.5 border-t border-border px-3 py-2">
-          <div className="flex gap-0.5 shrink-0">
-            {Array.from({ length: dailyLimit }).map((_, i) => (
-              <div
-                key={i}
-                className={`h-1.5 w-3 rounded-full transition-colors ${
-                  i < searchCount
-                    ? dailyLimitReached
-                      ? "bg-amber-400"
-                      : "bg-text-primary"
-                    : "bg-border"
-                }`}
-              />
-            ))}
+      {dailyLimit > 0 && (
+        <div className="flex items-center justify-between gap-3 border-t border-border px-3 py-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="flex gap-0.5 shrink-0">
+              {Array.from({ length: dailyLimit }).map((_, i) => (
+                <div
+                  key={i}
+                  className={`h-1.5 w-3 rounded-full transition-colors ${
+                    i < searchesLeft
+                      ? dailyLimitReached
+                        ? "bg-amber-400"
+                        : "bg-text-primary"
+                      : "bg-border"
+                  }`}
+                />
+              ))}
+            </div>
+            <span
+              className={`text-xs font-medium truncate ${
+                dailyLimitReached ? "text-amber-500" : "text-text-secondary"
+              }`}
+            >
+              {searchesLeft === 1
+                ? `1 of ${dailyLimit} search remaining`
+                : `${searchesLeft} of ${dailyLimit} searches remaining`}
+            </span>
           </div>
-          <span
-            className={`text-xs font-medium ${
-              dailyLimitReached ? "text-amber-500" : "text-text-secondary"
-            }`}
-          >
-            {dailyLimitReached
-              ? `Daily limit reached · ${countdown || "resets in ~24h"}`
-              : `${searchCount}/${dailyLimit} searches today`}
-          </span>
+          {limitResetAt && searchCount > 0 ? (
+            <span
+              className={`text-xs font-medium shrink-0 tabular-nums ${
+                dailyLimitReached ? "text-amber-500" : "text-text-muted"
+              }`}
+            >
+              {countdown || "…"}
+            </span>
+          ) : null}
         </div>
       )}
     </div>

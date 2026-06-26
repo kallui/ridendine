@@ -1,6 +1,6 @@
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
-import { DAILY_ROUTE_SEARCH_LIMIT } from "@/lib/rate-limit-config";
+import { DAILY_ROUTE_SEARCH_LIMIT, ROUTE_SEARCH_WINDOW_MS } from "@/lib/rate-limit-config";
 
 export type RateLimitResult = {
   success: boolean;
@@ -50,7 +50,10 @@ function getRouteDayLimiter() {
   if (!routeDayLimiter) {
     routeDayLimiter = new Ratelimit({
       redis: Redis.fromEnv(),
-      limiter: Ratelimit.slidingWindow(DAILY_ROUTE_SEARCH_LIMIT, "1 d"),
+      limiter: Ratelimit.slidingWindow(
+        DAILY_ROUTE_SEARCH_LIMIT,
+        `${ROUTE_SEARCH_WINDOW_MS} ms`,
+      ),
       prefix: "ridendine:route",
     });
   }
@@ -65,7 +68,7 @@ export async function checkRouteSearchLimit(
 ): Promise<RateLimitResult> {
   // Set DISABLE_RATE_LIMIT=true in .env.local to bypass all limits during development.
   if (process.env.DISABLE_RATE_LIMIT === "true") {
-    return { success: true, limit: 999, remaining: 999, reset: Date.now() + 86_400_000 };
+    return { success: true, limit: 999, remaining: 999, reset: Date.now() + ROUTE_SEARCH_WINDOW_MS };
   }
 
   if (upstashConfigured()) {
@@ -75,7 +78,7 @@ export async function checkRouteSearchLimit(
   return checkMemoryLimit(
     `${identifier}:route:day`,
     DAILY_ROUTE_SEARCH_LIMIT,
-    24 * 60 * 60 * 1000,
+    ROUTE_SEARCH_WINDOW_MS,
   );
 }
 
@@ -92,7 +95,7 @@ export function rateLimitResponse(result: RateLimitResult) {
       error: "rate_limit_exceeded",
       action: "route_search",
       limit: DAILY_ROUTE_SEARCH_LIMIT,
-      message: `Daily limit reached (${DAILY_ROUTE_SEARCH_LIMIT}/${DAILY_ROUTE_SEARCH_LIMIT} searches today). Resets tomorrow.`,
+      message: `Daily limit reached (${DAILY_ROUTE_SEARCH_LIMIT}/${DAILY_ROUTE_SEARCH_LIMIT} searches). Try again when the timer resets.`,
       retryAfter: retryAfterSec,
     },
     {
