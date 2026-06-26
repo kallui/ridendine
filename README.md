@@ -1,4 +1,4 @@
-# RideNDine ( Transit Route Restaurant Discovery )
+# RideNDine (Discover restaurants along your transit route)
 
 <img width="256" height="256" alt="kiki logo idle" src="https://github.com/user-attachments/assets/bf3423c1-c6f2-4f1c-bdf2-65639185c076" />
 
