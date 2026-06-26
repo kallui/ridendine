@@ -1,6 +1,9 @@
-# RideNDine
+# RideNDine (Discover restaurants along your transit route)
 
-Your commute has better food than you think.
+<img width="256" height="256" alt="kiki logo idle" src="https://github.com/user-attachments/assets/bf3423c1-c6f2-4f1c-bdf2-65639185c076" />
+
+
+**Your commute has better food than you think.**
 
 ## The problem
 
@@ -8,7 +11,7 @@ RideNDine started from my own commute.
 
 When I started a new job in a different city, I found myself spending hours on transit every day without knowing what food options were available along my route. After work, I would often want to grab dinner on the way home, but finding places that made sense for my commute meant searching for restaurants around different stops and figuring out which ones were actually convenient to reach.
 
-Google Maps already makes it easy for drivers to find restaurants along their route. For transit commuters, finding food stops that fit naturally into their journey often requires checking stops and nearby restaurants one by one. I built RideNDine to make those discoveries easier.
+Google Maps already makes it easy for drivers to find restaurants along their route. For transit commuters, finding food stops that fit conveniently into their commute often requires checking stops and nearby restaurants one by one. I built RideNDine to make those discoveries easier.
 
 ## How it works
 
@@ -16,6 +19,8 @@ Google Maps already makes it easy for drivers to find restaurants along their ro
 2. **Pick your route** — Choose the transit option that works best for you.
 3. **Explore food options along the way** — The app finds food spots within a 5-minute walk of your transit path. Filter by rating or price, and tap any pin on the map for details.
 4. **Open in Google Maps** — Found somewhere you like? Tap the card to open the place directly in Google Maps and get walking directions.
+
+<img width="1872" height="909" alt="image" src="https://github.com/user-attachments/assets/3f314517-4062-4e5e-a611-d5f346ce1c11" />
 
 ## How it finds restaurants
 
