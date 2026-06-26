@@ -32,16 +32,18 @@ export default function StopGroupCard({
 
   return (
     <div
-      className={`rounded-xl border transition-colors ${
+      className={`rounded-xl border transition-all ${
         group.isTransfer
-          ? "border-amber-500/40 bg-amber-500/5"
-          : "border-border bg-card-bg"
+          ? "border-amber-500/40 bg-amber-500/5 hover:border-amber-500/60 hover:shadow-md"
+          : "border-border bg-card-bg hover:border-text-muted hover:shadow-md"
       }`}
     >
       {/* ── Stop header (always visible, click to expand/collapse) ── */}
       <button
         onClick={onToggle}
-        className="w-full flex items-start gap-3 px-4 py-3 text-left"
+        className={`w-full flex items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-accent-soft/40 ${
+          isExpanded ? "rounded-t-xl" : "rounded-xl"
+        }`}
         aria-expanded={isExpanded}
       >
         {/* Stop dot */}

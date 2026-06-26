@@ -90,7 +90,7 @@ describe("search-guards-core", () => {
   });
 
   it("exports the configured cooldown duration", () => {
-    expect(ROUTE_SEARCH_COOLDOWN_MS).toBe(8_000);
+    expect(ROUTE_SEARCH_COOLDOWN_MS).toBe(3_000);
   });
 
   it("discards reset timestamps when the search count is zero", () => {

@@ -2,7 +2,7 @@
 
 import { Restaurant, StopGroup } from "@/app/page";
 import StopGroupCard from "./StopGroupCard";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 
 interface RestaurantSidebarProps {
   restaurants: Restaurant[];
@@ -28,23 +28,57 @@ export default function RestaurantSidebar({
 }: RestaurantSidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  // Set of stop indices whose accordion section is open.
+  // Manually expanded stops (non-selected). Selected stop is expanded by default.
   const [expandedStops, setExpandedStops] = useState<Set<number>>(new Set());
+  const [collapsedSelectedStops, setCollapsedSelectedStops] = useState<
+    Set<number>
+  >(new Set());
+  const [prevSelectedStopIndex, setPrevSelectedStopIndex] = useState(
+    selectedStopIndex,
+  );
 
-  // Auto-expand the stop that was clicked on the map.
-  useEffect(() => {
+  // Re-expand when the map selection changes to a different stop.
+  if (selectedStopIndex !== prevSelectedStopIndex) {
+    setPrevSelectedStopIndex(selectedStopIndex);
     if (selectedStopIndex !== null && selectedStopIndex !== undefined) {
-      setExpandedStops((prev) => new Set([...prev, selectedStopIndex]));
+      setCollapsedSelectedStops((prev) => {
+        if (!prev.has(selectedStopIndex)) return prev;
+        const next = new Set(prev);
+        next.delete(selectedStopIndex);
+        return next;
+      });
     }
-  }, [selectedStopIndex]);
+  }
+
+  const isStopExpanded = (stopIndex: number) => {
+    if (collapsedSelectedStops.has(stopIndex)) return false;
+    if (stopIndex === selectedStopIndex) return true;
+    return expandedStops.has(stopIndex);
+  };
 
   const toggleStop = (stopIndex: number) => {
-    setExpandedStops((prev) => {
+    if (isStopExpanded(stopIndex)) {
+      if (stopIndex === selectedStopIndex) {
+        setCollapsedSelectedStops((prev) => new Set(prev).add(stopIndex));
+      } else {
+        setExpandedStops((prev) => {
+          const next = new Set(prev);
+          next.delete(stopIndex);
+          return next;
+        });
+      }
+      return;
+    }
+
+    setCollapsedSelectedStops((prev) => {
+      if (!prev.has(stopIndex)) return prev;
       const next = new Set(prev);
-      if (next.has(stopIndex)) next.delete(stopIndex);
-      else next.add(stopIndex);
+      next.delete(stopIndex);
       return next;
     });
+    if (stopIndex !== selectedStopIndex) {
+      setExpandedStops((prev) => new Set(prev).add(stopIndex));
+    }
   };
 
   // Filter stop groups by the search query: keep groups that have at least
@@ -89,7 +123,7 @@ export default function RestaurantSidebar({
       <StopGroupCard
         key={group.stopIndex}
         group={group}
-        isExpanded={expandedStops.has(group.stopIndex)}
+        isExpanded={isStopExpanded(group.stopIndex)}
         onToggle={() => toggleStop(group.stopIndex)}
         onRestaurantClick={onRestaurantClick}
       />

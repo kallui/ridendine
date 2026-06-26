@@ -57,6 +57,43 @@ export function formatReviewCount(count?: number) {
   return count >= 1000 ? `${(count / 1000).toFixed(1)}k` : count.toString();
 }
 
+function RatingDisplay({
+  rating,
+  userRatingsTotal,
+  placeId,
+  size = "card",
+}: {
+  rating?: number;
+  userRatingsTotal?: number;
+  placeId: string;
+  size?: "card" | "infowindow";
+}) {
+  const scoreClass =
+    size === "card"
+      ? "text-xs font-semibold text-text-primary"
+      : "text-sm font-semibold text-text-primary";
+  const countClass =
+    size === "card" ? "text-xs text-text-muted" : "text-sm text-gray-500";
+
+  if (rating == null) {
+    return (
+      <span className={size === "card" ? "text-xs text-text-muted" : "text-sm text-text-muted"}>
+        N/A
+      </span>
+    );
+  }
+
+  return (
+    <>
+      <span className={scoreClass}>{rating.toFixed(1)}</span>
+      {renderStars(rating, placeId)}
+      {userRatingsTotal != null && userRatingsTotal > 0 && (
+        <span className={countClass}>({formatReviewCount(userRatingsTotal)})</span>
+      )}
+    </>
+  );
+}
+
 // ── Detour badge ─────────────────────────────────────────────────────────────
 
 export function DetourBadge({ minutes }: { minutes: number }) {
@@ -96,17 +133,12 @@ export function RestaurantDetails({
     return (
       <div className="flex flex-col gap-0.5">
         <div className="flex items-center gap-1.5 flex-wrap">
-          {restaurant.rating && (
-            <span className="text-xs font-semibold text-text-primary">
-              {restaurant.rating.toFixed(1)}
-            </span>
-          )}
-          {renderStars(restaurant.rating, restaurant.placeId)}
-          {restaurant.userRatingsTotal && (
-            <span className="text-xs text-text-muted">
-              ({formatReviewCount(restaurant.userRatingsTotal)})
-            </span>
-          )}
+          <RatingDisplay
+            rating={restaurant.rating}
+            userRatingsTotal={restaurant.userRatingsTotal}
+            placeId={restaurant.placeId}
+            size="card"
+          />
           <span className="text-text-muted text-xs">·</span>
           <DetourBadge minutes={restaurant.detourMinutes} />
         </div>
@@ -122,19 +154,14 @@ export function RestaurantDetails({
   // infowindow variant — more spacious, shown in the map popup
   return (
     <>
-      {restaurant.rating && (
-        <div className="flex items-center gap-2 mb-2 flex-wrap">
-          <span className="text-sm font-semibold text-text-primary">
-            {restaurant.rating.toFixed(1)}
-          </span>
-          {renderStars(restaurant.rating, restaurant.placeId)}
-          {restaurant.userRatingsTotal && (
-            <span className="text-sm text-gray-500">
-              ({formatReviewCount(restaurant.userRatingsTotal)})
-            </span>
-          )}
-        </div>
-      )}
+      <div className="flex items-center gap-2 mb-2 flex-wrap">
+        <RatingDisplay
+          rating={restaurant.rating}
+          userRatingsTotal={restaurant.userRatingsTotal}
+          placeId={restaurant.placeId}
+          size="infowindow"
+        />
+      </div>
 
       {/* Detour */}
       <div className="flex items-center gap-2 mb-2">
