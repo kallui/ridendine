@@ -27,9 +27,25 @@ export function useQuota() {
 
   // Fetch on mount and whenever the tab regains focus.
   useEffect(() => {
-    void fetchQuota();
-    window.addEventListener("focus", fetchQuota);
-    return () => window.removeEventListener("focus", fetchQuota);
+    const controller = new AbortController();
+
+    fetch("/api/quota", { signal: controller.signal })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: QuotaResult | null) => {
+        if (data) setQuota(data);
+      })
+      .catch(() => {
+        // Silently ignore — canSearch stays optimistic while offline.
+      });
+
+    const handleFocus = () => {
+      void fetchQuota();
+    };
+    window.addEventListener("focus", handleFocus);
+    return () => {
+      controller.abort();
+      window.removeEventListener("focus", handleFocus);
+    };
   }, [fetchQuota]);
 
   // Schedule a re-fetch exactly when the next slot opens up.
