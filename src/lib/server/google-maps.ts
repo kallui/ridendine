@@ -55,19 +55,41 @@ export async function fetchDirections(
 type NearbySearchResponse = {
   status: string;
   results?: PlaceSearchResult[];
+  next_page_token?: string;
   error_message?: string;
 };
 
-export async function fetchNearbyRestaurants(
+/** Google Nearby Search returns up to 20 results per page. */
+export const NEARBY_SEARCH_PAGE_SIZE = 20;
+
+/** Legacy Nearby Search allows up to 3 pages (60 results) per circle. */
+export const NEARBY_SEARCH_MAX_PAGES = 3;
+
+/** Google requires a short delay before a next_page_token becomes valid. */
+export const NEARBY_PAGE_TOKEN_DELAY_MS = 2000;
+
+const NEARBY_PAGE_TOKEN_MAX_RETRIES = 2;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchNearbyPage(
   location: { lat: number; lng: number },
   radius: number,
-): Promise<PlaceSearchResult[]> {
+  pageToken?: string,
+): Promise<NearbySearchResponse> {
   const url = new URL(
     "https://maps.googleapis.com/maps/api/place/nearbysearch/json",
   );
-  url.searchParams.set("location", `${location.lat},${location.lng}`);
-  url.searchParams.set("radius", String(radius));
-  url.searchParams.set("type", "restaurant");
+
+  if (pageToken) {
+    url.searchParams.set("pagetoken", pageToken);
+  } else {
+    url.searchParams.set("location", `${location.lat},${location.lng}`);
+    url.searchParams.set("radius", String(radius));
+    url.searchParams.set("type", "restaurant");
+  }
   url.searchParams.set("key", getApiKey());
 
   const response = await fetch(url.toString(), {
@@ -78,17 +100,81 @@ export async function fetchNearbyRestaurants(
     throw new Error(`Places API HTTP ${response.status}`);
   }
 
-  const data: NearbySearchResponse = await response.json();
+  return response.json();
+}
 
-  if (data.status === "ZERO_RESULTS") {
-    return [];
+async function fetchNearbyPageWithTokenRetry(
+  location: { lat: number; lng: number },
+  radius: number,
+  pageToken: string,
+): Promise<NearbySearchResponse> {
+  let lastData: NearbySearchResponse | undefined;
+
+  for (let attempt = 0; attempt <= NEARBY_PAGE_TOKEN_MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      await sleep(NEARBY_PAGE_TOKEN_DELAY_MS);
+    }
+
+    lastData = await fetchNearbyPage(location, radius, pageToken);
+    if (lastData.status !== "INVALID_REQUEST") {
+      return lastData;
+    }
   }
 
-  if (data.status !== "OK" || !data.results) {
-    throw new Error(data.error_message ?? `Places API status: ${data.status}`);
+  return lastData!;
+}
+
+function shouldFetchNextPage(
+  pageResults: PlaceSearchResult[],
+  nextPageToken: string | undefined,
+  pagesFetched: number,
+): boolean {
+  return (
+    pagesFetched < NEARBY_SEARCH_MAX_PAGES &&
+    pageResults.length === NEARBY_SEARCH_PAGE_SIZE &&
+    Boolean(nextPageToken)
+  );
+}
+
+export async function fetchNearbyRestaurants(
+  location: { lat: number; lng: number },
+  radius: number,
+): Promise<PlaceSearchResult[]> {
+  const allResults: PlaceSearchResult[] = [];
+  let pageToken: string | undefined;
+  let pagesFetched = 0;
+
+  while (pagesFetched < NEARBY_SEARCH_MAX_PAGES) {
+    if (pageToken) {
+      await sleep(NEARBY_PAGE_TOKEN_DELAY_MS);
+    }
+
+    const data = pageToken
+      ? await fetchNearbyPageWithTokenRetry(location, radius, pageToken)
+      : await fetchNearbyPage(location, radius);
+
+    if (data.status === "ZERO_RESULTS") {
+      return pagesFetched === 0 ? [] : allResults;
+    }
+
+    if (data.status !== "OK" || !data.results) {
+      if (pagesFetched === 0) {
+        throw new Error(data.error_message ?? `Places API status: ${data.status}`);
+      }
+      break;
+    }
+
+    allResults.push(...data.results);
+    pagesFetched += 1;
+
+    if (!shouldFetchNextPage(data.results, data.next_page_token, pagesFetched)) {
+      break;
+    }
+
+    pageToken = data.next_page_token;
   }
 
-  return data.results;
+  return allResults;
 }
 
 /**
