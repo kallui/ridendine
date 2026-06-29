@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useCustomPlacesAutocomplete } from "@/hooks/useCustomPlacesAutocomplete";
 
+import type { QuotaResult } from "@/lib/rate-limit/types";
+
 interface RouteSearchProps {
   onSearch: (
     origin: string | google.maps.Place,
@@ -19,10 +21,7 @@ interface RouteSearchProps {
   userLocation?: google.maps.LatLngLiteral | null;
   collapsed?: boolean;
   onExpand?: () => void;
-  searchCount?: number;
-  dailyLimit?: number;
-  dailyLimitReached?: boolean;
-  limitResetAt?: number | null;
+  quota?: QuotaResult | null;
 }
 
 // Defined outside RouteSearch so React doesn't create a new component type on every render.
@@ -69,22 +68,21 @@ function PredictionList({
   );
 }
 
-function formatResetCountdown(resetAt: number): string {
-  const diffMs = resetAt - Date.now();
-  if (diffMs <= 0) return "Resetting soon";
+function formatNextIncrease(nextIncreaseAt: number): string {
+  const diffMs = nextIncreaseAt - Date.now();
+  if (diffMs <= 0) return "Available soon";
 
-  // Floor each unit — ceil was rounding 23h 59m 1s up to "24h 0m".
   const hrs = Math.floor(diffMs / 3_600_000);
   const mins = Math.floor((diffMs % 3_600_000) / 60_000);
   const secs = Math.floor((diffMs % 60_000) / 1000);
 
-  if (hrs > 0) return `${hrs}h ${mins}m until reset`;
-  if (mins > 0) return `${mins}m until reset`;
-  return `${secs}s until reset`;
+  if (hrs > 0) return `Next in ${hrs}h ${mins}m`;
+  if (mins > 0) return `Next in ${mins}m`;
+  return `Next in ${secs}s`;
 }
 
-function countdownTickMs(resetAt: number): number {
-  return resetAt - Date.now() > 60_000 ? 60_000 : 1_000;
+function countdownTickMs(nextIncreaseAt: number): number {
+  return nextIncreaseAt - Date.now() > 60_000 ? 60_000 : 1_000;
 }
 
 export default function RouteSearch({
@@ -97,28 +95,26 @@ export default function RouteSearch({
   userLocation,
   collapsed = false,
   onExpand,
-  searchCount = 0,
-  dailyLimit = 5,
-  dailyLimitReached = false,
-  limitResetAt = null,
+  quota = null,
 }: RouteSearchProps) {
   const skipNextAutoSearchRef = useRef(false);
   const originInputRef = useRef<HTMLInputElement>(null);
   const destInputRef = useRef<HTMLInputElement>(null);
 
+  const nextIncreaseAt = quota?.nextIncreaseAt ?? null;
   const [countdown, setCountdown] = useState<string>(() =>
-    limitResetAt ? formatResetCountdown(limitResetAt) : "",
+    nextIncreaseAt ? formatNextIncrease(nextIncreaseAt) : "",
   );
   useEffect(() => {
-    if (!limitResetAt) return;
+    if (!nextIncreaseAt) { setCountdown(""); return; }
     let timeoutId: number;
     const tick = () => {
-      setCountdown(formatResetCountdown(limitResetAt));
-      timeoutId = window.setTimeout(tick, countdownTickMs(limitResetAt));
+      setCountdown(formatNextIncrease(nextIncreaseAt));
+      timeoutId = window.setTimeout(tick, countdownTickMs(nextIncreaseAt));
     };
     tick();
     return () => window.clearTimeout(timeoutId);
-  }, [limitResetAt]);
+  }, [nextIncreaseAt]);
   const [focusedField, setFocusedField] = useState<
     "origin" | "destination" | null
   >(null);
@@ -396,7 +392,7 @@ export default function RouteSearch({
 
   const originDisplayLabel =
     defaultOrigin === "Current Location" ? "Current location" : defaultOrigin;
-  const searchesLeft = dailyLimit - searchCount;
+  const limitReached = quota !== null && quota.remaining === 0;
 
   return (
     <div className="bg-card-bg rounded-lg shadow-lg flex flex-col border border-border">
@@ -763,40 +759,40 @@ export default function RouteSearch({
         </form>
       )}
 
-      {dailyLimit > 0 && (
+      {quota !== null && (
         <div className="flex items-center justify-between gap-3 border-t border-border px-3 py-2">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="flex gap-0.5 shrink-0">
-              {Array.from({ length: dailyLimit }).map((_, i) => (
+              {Array.from({ length: quota.limit }).map((_, i) => (
                 <div
                   key={i}
                   className={`h-1.5 w-3 rounded-full transition-colors ${
-                    i < searchesLeft
-                      ? dailyLimitReached
+                    i < quota.remaining
+                      ? "bg-text-primary"
+                      : limitReached
                         ? "bg-amber-400"
-                        : "bg-text-primary"
-                      : "bg-border"
+                        : "bg-border"
                   }`}
                 />
               ))}
             </div>
             <span
               className={`text-xs font-medium truncate ${
-                dailyLimitReached ? "text-amber-500" : "text-text-secondary"
+                limitReached ? "text-amber-500" : "text-text-secondary"
               }`}
             >
-              {searchesLeft === 1
-                ? `1 of ${dailyLimit} search remaining`
-                : `${searchesLeft} of ${dailyLimit} searches remaining`}
+              {quota.remaining === 1
+                ? `1 of ${quota.limit} search remaining`
+                : `${quota.remaining} of ${quota.limit} searches remaining`}
             </span>
           </div>
-          {limitResetAt && searchCount > 0 ? (
+          {countdown ? (
             <span
               className={`text-xs font-medium shrink-0 tabular-nums ${
-                dailyLimitReached ? "text-amber-500" : "text-text-muted"
+                limitReached ? "text-amber-500" : "text-text-muted"
               }`}
             >
-              {countdown || "…"}
+              {countdown}
             </span>
           ) : null}
         </div>

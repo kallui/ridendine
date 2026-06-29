@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { DAILY_ROUTE_SEARCH_LIMIT, ROUTE_SEARCH_WINDOW_MS } from "@/lib/rate-limit-config";
+import { QUOTA_LIMIT } from "@/lib/rate-limit/config";
 import { createDirectionsApiFailure, createDirectionsApiResponse } from "@/test/fixtures/directions-api-response";
 import { createLongRoute, createRoute } from "@/test/fixtures/directions-route";
 import { createJsonRequest } from "@/test/fixtures/request-helpers";
 
 const fetchDirections = vi.fn();
-const checkRouteSearchLimit = vi.fn();
-const rateLimitResponse = vi.fn();
+const consumeQuota = vi.fn();
+const quotaExceededResponse = vi.fn();
 const getOrCreateSessionId = vi.fn();
 const getClientIp = vi.fn();
 
@@ -14,9 +14,9 @@ vi.mock("@/lib/server/google-maps", () => ({
   fetchDirections: (...args: unknown[]) => fetchDirections(...args),
 }));
 
-vi.mock("@/lib/server/rate-limit", () => ({
-  checkRouteSearchLimit: (...args: unknown[]) => checkRouteSearchLimit(...args),
-  rateLimitResponse: (...args: unknown[]) => rateLimitResponse(...args),
+vi.mock("@/lib/rate-limit/server", () => ({
+  consumeQuota: (...args: unknown[]) => consumeQuota(...args),
+  quotaExceededResponse: (...args: unknown[]) => quotaExceededResponse(...args),
 }));
 
 vi.mock("@/lib/server/session", () => ({
@@ -31,14 +31,14 @@ describe("POST /api/directions", () => {
     vi.clearAllMocks();
     getOrCreateSessionId.mockResolvedValue("session-123");
     getClientIp.mockReturnValue("1.2.3.4");
-    checkRouteSearchLimit.mockResolvedValue({
-      success: true,
-      limit: DAILY_ROUTE_SEARCH_LIMIT,
-      remaining: DAILY_ROUTE_SEARCH_LIMIT - 1,
-      reset: Date.now() + ROUTE_SEARCH_WINDOW_MS,
+    consumeQuota.mockResolvedValue({
+      allowed: true,
+      limit: QUOTA_LIMIT,
+      remaining: QUOTA_LIMIT - 1,
+      nextIncreaseAt: Date.now() + 3_600_000,
     });
     fetchDirections.mockResolvedValue(createDirectionsApiResponse());
-    rateLimitResponse.mockImplementation(() =>
+    quotaExceededResponse.mockImplementation(() =>
       Response.json(
         { error: "rate_limit_exceeded", retryAfter: 3600 },
         { status: 429, headers: { "Retry-After": "3600" } },
@@ -65,12 +65,12 @@ describe("POST /api/directions", () => {
     expect(body.error).toBe("missing_fields");
   });
 
-  it("returns 429 when rate limit is exceeded", async () => {
-    checkRouteSearchLimit.mockResolvedValue({
-      success: false,
-      limit: DAILY_ROUTE_SEARCH_LIMIT,
+  it("returns 429 when quota is exceeded", async () => {
+    consumeQuota.mockResolvedValue({
+      allowed: false,
+      limit: QUOTA_LIMIT,
       remaining: 0,
-      reset: Date.now() + ROUTE_SEARCH_WINDOW_MS,
+      nextIncreaseAt: Date.now() + 3_600_000,
     });
 
     const response = await POST(
@@ -80,7 +80,7 @@ describe("POST /api/directions", () => {
       }),
     );
 
-    expect(rateLimitResponse).toHaveBeenCalledOnce();
+    expect(quotaExceededResponse).toHaveBeenCalledOnce();
     expect(response.status).toBe(429);
   });
 
@@ -116,7 +116,7 @@ describe("POST /api/directions", () => {
     expect(body.error).toBe("route_too_long");
   });
 
-  it("returns 200 with commute-filtered routes on success", async () => {
+  it("returns 200 with routes and quota on success", async () => {
     const shortRoute = createRoute();
     const longRoute = createLongRoute();
     fetchDirections.mockResolvedValue({
@@ -135,7 +135,8 @@ describe("POST /api/directions", () => {
     const body = await response.json();
     expect(body.routes).toHaveLength(1);
     expect(body.routes[0]).toEqual(shortRoute);
-    expect(body.rateLimitReset).toBeGreaterThan(Date.now());
-    expect(checkRouteSearchLimit).toHaveBeenCalledWith("1.2.3.4:session-123");
+    expect(body.quota).toBeDefined();
+    expect(body.quota.remaining).toBe(QUOTA_LIMIT - 1);
+    expect(consumeQuota).toHaveBeenCalledWith("1.2.3.4:session-123");
   });
 });

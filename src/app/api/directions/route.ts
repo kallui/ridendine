@@ -2,11 +2,11 @@ import { fetchDirections } from "@/lib/server/google-maps";
 import {
   formatCommuteLimitMessage,
   isRouteWithinCommuteLimits,
-} from "@/lib/rate-limit-config";
+} from "@/lib/commute-limits";
 import {
-  checkRouteSearchLimit,
-  rateLimitResponse,
-} from "@/lib/server/rate-limit";
+  consumeQuota,
+  quotaExceededResponse,
+} from "@/lib/rate-limit/server";
 import { getClientIp, getOrCreateSessionId } from "@/lib/server/session";
 import type { WaypointInput } from "@/lib/places-types";
 
@@ -33,10 +33,10 @@ export async function POST(request: Request) {
 
   const sessionId = await getOrCreateSessionId();
   const identifier = `${getClientIp(request)}:${sessionId}`;
-  const rateLimit = await checkRouteSearchLimit(identifier);
+  const quota = await consumeQuota(identifier);
 
-  if (!rateLimit.success) {
-    return rateLimitResponse(rateLimit);
+  if (!quota.allowed) {
+    return quotaExceededResponse(quota);
   }
 
   try {
@@ -70,7 +70,7 @@ export async function POST(request: Request) {
       routes,
       geocoded_waypoints: data.geocoded_waypoints,
       request: data.request,
-      rateLimitReset: rateLimit.reset,
+      quota: { limit: quota.limit, remaining: quota.remaining, nextIncreaseAt: quota.nextIncreaseAt },
     });
   } catch (error) {
     console.error("Directions API error:", error);

@@ -10,15 +10,21 @@ export default function Navbar({ themeMode, onToggleTheme }: NavbarProps) {
   return (
     <nav className="fixed top-0 left-0 right-0 z-40 bg-card-bg/95 backdrop-blur-md text-text-primary px-6 py-3 shadow-lg border-b border-border">
       <div className="flex items-center justify-between">
-        <Link href="/" className="flex items-center opacity-90 hover:opacity-100 transition-opacity">
+        <Link
+          href="/"
+          className="flex items-center gap-2.5 opacity-90 hover:opacity-100 transition-opacity"
+        >
           <Image
             src="/logo-64.png"
-            alt="RideNDine"
+            alt=""
             width={48}
             height={48}
             className="h-12 w-12"
             priority
           />
+          <span className="text-lg font-semibold tracking-tight text-text-primary">
+            RideNDine
+          </span>
         </Link>
 
         <div className="flex items-center gap-1">

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useMapsLibrary } from "@vis.gl/react-google-maps";
-import { AUTOCOMPLETE_DEBOUNCE_MS } from "@/lib/client/search-guards";
+import { AUTOCOMPLETE_DEBOUNCE_MS } from "@/lib/search-config";
 
 // Metro Vancouver fallback bounds
 const VANCOUVER_BIAS: google.maps.LatLngBoundsLiteral = {

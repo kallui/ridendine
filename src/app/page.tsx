@@ -13,11 +13,8 @@ import { useThemeMode } from "@/hooks/useThemeMode";
 import {
   formatCommuteLimitMessage,
   isRouteWithinCommuteLimits,
-} from "@/lib/rate-limit-config";
-import {
-  parseApiError,
-  useRouteSearchGuards,
-} from "@/lib/client/search-guards";
+} from "@/lib/commute-limits";
+import { parseApiError, useQuota } from "@/hooks/useQuota";
 import {
   normalizeDirectionsResult,
   isTransitStep,
@@ -76,15 +73,7 @@ function MapContent() {
   const [locationError, setLocationError] = useState<string | null>(null);
   const [routeError, setRouteError] = useState<string | null>(null);
   const [isFetchingDirections, setIsFetchingDirections] = useState(false);
-  const {
-    canSearch,
-    dailyLimitReached,
-    count: searchCount,
-    dailyLimit,
-    resetAt,
-    recordSearch,
-    markLimitReached,
-  } = useRouteSearchGuards();
+  const { quota, canSearch, recordSearch, markBlocked } = useQuota();
   // === SEARCH CONFIGURATION ===
   const searchRadius = 400; // 5-min walk (~400 m) — used for both the API call and visible circles
   const fallbackSearchInterval = 0.5; // Fallback: sample transit polyline every X km when GTFS unavailable
@@ -311,16 +300,14 @@ function MapContent() {
 
       if (!response.ok) {
         if (response.status === 429) {
-          // Parse the body once to get both the user message and the reset time.
           try {
             const body = (await response.json()) as {
               message?: string;
-              retryAfter?: number;
+              quota?: import("@/lib/rate-limit/types").QuotaResult;
             };
-            markLimitReached(body.retryAfter);
+            if (body.quota) markBlocked(body.quota);
             setRouteError(body.message ?? "Daily limit reached. Try again later.");
           } catch {
-            markLimitReached();
             setRouteError("Daily limit reached. Try again later.");
           }
         } else {
@@ -335,7 +322,7 @@ function MapContent() {
         routes: google.maps.DirectionsRoute[];
         geocoded_waypoints?: google.maps.DirectionsGeocodedWaypoint[];
         request?: google.maps.DirectionsRequest;
-        rateLimitReset?: number;
+        quota?: import("@/lib/rate-limit/types").QuotaResult;
       };
 
       if (data.status !== "OK" || !data.routes?.length) {
@@ -367,7 +354,7 @@ function MapContent() {
       }
 
       setRouteError(null);
-      recordSearch(data.rateLimitReset);
+      if (data.quota) recordSearch(data.quota);
       setDirectionsResult(
         normalizeDirectionsResult(
           { ...data, routes: limitedRoutes },
@@ -833,15 +820,12 @@ function MapContent() {
             !canSearch || isFetchingDirections || isSearchingRestaurants
           }
           searchBlockedMessage={
-            routeError && !dailyLimitReached ? routeError : null
+            routeError && quota?.remaining !== 0 ? routeError : null
           }
           defaultOrigin={originLabel}
           defaultDestination={destinationLabel}
           userLocation={userLocation}
-          searchCount={searchCount}
-          dailyLimit={dailyLimit}
-          dailyLimitReached={dailyLimitReached}
-          limitResetAt={resetAt}
+          quota={quota}
         />
         {routes.length > 0 && (
           <div className="hidden lg:block flex-1 min-h-0">
