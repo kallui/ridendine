@@ -6,7 +6,7 @@ import {
   AdvancedMarker,
   Pin,
 } from "@vis.gl/react-google-maps";
-import { useEffect, useRef, useMemo } from "react";
+import { useEffect, useRef } from "react";
 import { Restaurant, SearchCircle, StopGroup } from "@/app/page";
 import {
   getRouteBoundsPoints,
@@ -317,27 +317,8 @@ export default function Map({
     };
   }, [map, searchCircles, showBounds, onMapClick, onStopClick, selectedStopIndex]);
 
-  // ── Smart restaurant marker set ───────────────────────────────────────────
-  // Default: show the top 2-3 restaurants per stop (by rating × log(reviews)).
-  // When a stop is selected: show all its restaurants; dim top picks elsewhere.
-
-  const topRestaurantIds = useMemo(() => {
-    const ids = new Set<string>();
-    const byStop: Record<number, Restaurant[]> = {};
-    for (const r of restaurants) {
-      if (!byStop[r.nearestStopIndex]) byStop[r.nearestStopIndex] = [];
-      byStop[r.nearestStopIndex].push(r);
-    }
-    for (const rests of Object.values(byStop)) {
-      const sorted = [...rests].sort(
-        (a, b) =>
-          (b.rating ?? 0) * Math.log((b.userRatingsTotal ?? 0) + 1) -
-          (a.rating ?? 0) * Math.log((a.userRatingsTotal ?? 0) + 1),
-      );
-      sorted.slice(0, 3).forEach((r) => ids.add(r.placeId));
-    }
-    return ids;
-  }, [restaurants]);
+  // ── Restaurant markers ────────────────────────────────────────────────────
+  // Show every restaurant; dim markers at other stops when one stop is selected.
 
   const markerRoute =
     selectedRouteIndex !== null && routes[selectedRouteIndex]
@@ -372,30 +353,28 @@ export default function Map({
         const isSelectedStop =
           selectedStopIndex !== null &&
           restaurant.nearestStopIndex === selectedStopIndex;
-        const isTopMarker = topRestaurantIds.has(restaurant.placeId);
-
-        // Hide this marker if it's not a top pick and its stop isn't selected.
-        if (!isTopMarker && !isSelectedStop) return null;
+        const isHighlighted =
+          selectedRestaurant?.placeId === restaurant.placeId;
 
         const isDimmed =
-          selectedStopIndex !== null && !isSelectedStop;
+          selectedStopIndex !== null && !isSelectedStop && !isHighlighted;
 
         return (
           <AdvancedMarker
             key={restaurant.placeId}
             position={restaurant.location}
-            zIndex={isSelectedStop ? 10 : 5}
+            zIndex={isHighlighted ? 15 : isSelectedStop ? 10 : 5}
             onClick={() => onSelectRestaurant(restaurant)}
           >
             <Pin
               background={
-                isDimmed ? "#9CA3AF" : isSelectedStop ? "#F97316" : "#EF4444"
+                isDimmed ? "#9CA3AF" : isSelectedStop || isHighlighted ? "#F97316" : "#EF4444"
               }
               borderColor={
-                isDimmed ? "#6B7280" : isSelectedStop ? "#C2410C" : "#991B1B"
+                isDimmed ? "#6B7280" : isSelectedStop || isHighlighted ? "#C2410C" : "#991B1B"
               }
               glyphColor={isDimmed ? "#E5E7EB" : "#FEE2E2"}
-              scale={isSelectedStop ? 1.2 : 1}
+              scale={isSelectedStop || isHighlighted ? 1.2 : 1}
             />
           </AdvancedMarker>
         );

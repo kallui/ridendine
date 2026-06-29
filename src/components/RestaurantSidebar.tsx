@@ -3,7 +3,7 @@
 import { Restaurant, StopGroup, StopResolution } from "@/app/page";
 import StopGroupCard from "./StopGroupCard";
 import RestaurantCard from "./RestaurantCard";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 
 interface RestaurantSidebarProps {
   restaurants: Restaurant[];
@@ -42,6 +42,12 @@ export default function RestaurantSidebar({
   const [prevSelectedStopIndex, setPrevSelectedStopIndex] = useState(
     selectedStopIndex,
   );
+
+  useEffect(() => {
+    if (isSearching) {
+      setIsCollapsed(false);
+    }
+  }, [isSearching]);
 
   if (selectedStopIndex !== prevSelectedStopIndex) {
     setPrevSelectedStopIndex(selectedStopIndex);
@@ -169,7 +175,7 @@ export default function RestaurantSidebar({
   const restaurantList = isSampled ? flatList : groupList;
 
   const desktopTitle = isSearching
-    ? "Restaurants"
+    ? "Searching for restaurants…"
     : isSampled
       ? searchQuery
         ? `${filteredRestaurants.length} match${filteredRestaurants.length !== 1 ? "es" : ""}`
@@ -241,7 +247,7 @@ export default function RestaurantSidebar({
             </div>
           )}
           {sampledDisclaimer}
-          {searchInput}
+          {!isSearching && searchInput}
         </div>
 
         <div className="flex-1 overflow-y-auto">
@@ -293,7 +299,7 @@ export default function RestaurantSidebar({
             </div>
 
             <div className="px-4 py-3 border-b border-border shrink-0">
-              {searchInput}
+              {!isSearching && searchInput}
             </div>
 
             <div className="relative flex-1 min-h-0">
