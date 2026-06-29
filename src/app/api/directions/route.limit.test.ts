@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { DAILY_ROUTE_SEARCH_LIMIT } from "@/lib/rate-limit-config";
-import { resetMemoryRateLimits } from "@/lib/server/rate-limit";
+import { QUOTA_LIMIT } from "@/lib/rate-limit/config";
+import { resetMemoryQuota } from "@/lib/rate-limit/server";
 import { createDirectionsApiResponse } from "@/test/fixtures/directions-api-response";
 import { createJsonRequest } from "@/test/fixtures/request-helpers";
 
@@ -26,7 +26,7 @@ describe("POST /api/directions sequential rate limit", () => {
   beforeEach(() => {
     delete process.env.UPSTASH_REDIS_REST_URL;
     delete process.env.UPSTASH_REDIS_REST_TOKEN;
-    resetMemoryRateLimits();
+    resetMemoryQuota();
     vi.clearAllMocks();
     getOrCreateSessionId.mockResolvedValue("session-abc");
     getClientIp.mockReturnValue("10.0.0.1");
@@ -34,7 +34,7 @@ describe("POST /api/directions sequential rate limit", () => {
   });
 
   afterEach(() => {
-    resetMemoryRateLimits();
+    resetMemoryQuota();
     if (originalUpstashUrl !== undefined) {
       process.env.UPSTASH_REDIS_REST_URL = originalUpstashUrl;
     }
@@ -43,12 +43,14 @@ describe("POST /api/directions sequential rate limit", () => {
     }
   });
 
-  it(`allows ${DAILY_ROUTE_SEARCH_LIMIT} searches then returns 429`, async () => {
+  it(`allows ${QUOTA_LIMIT} searches then returns 429`, async () => {
     const body = { origin: "A", destination: "B" };
 
-    for (let i = 0; i < DAILY_ROUTE_SEARCH_LIMIT; i++) {
+    for (let i = 0; i < QUOTA_LIMIT; i++) {
       const response = await POST(createJsonRequest("http://test/api/directions", body));
       expect(response.status).toBe(200);
+      const json = await response.json();
+      expect(json.quota.remaining).toBe(QUOTA_LIMIT - i - 1);
     }
 
     const blocked = await POST(createJsonRequest("http://test/api/directions", body));
@@ -56,5 +58,7 @@ describe("POST /api/directions sequential rate limit", () => {
     const payload = await blocked.json();
     expect(payload.error).toBe("rate_limit_exceeded");
     expect(blocked.headers.get("Retry-After")).toBeTruthy();
+    expect(payload.quota.remaining).toBe(0);
+    expect(payload.quota.nextIncreaseAt).toBeGreaterThan(Date.now());
   });
 });

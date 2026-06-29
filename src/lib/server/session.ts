@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
-import { SESSION_COOKIE_NAME } from "@/lib/rate-limit-config";
+
+const SESSION_COOKIE_NAME = "rid_session";
 
 export async function getOrCreateSessionId(): Promise<string> {
   const cookieStore = await cookies();

@@ -1,30 +1,8 @@
-/**
- * Limits & guardrails for user actions.
- *
- * Route search  →  1 Directions API call, capped per day (Upstash)
- * Restaurant load  →  no separate limit; re-selecting a route uses cache
- */
-
-/** Max route searches per user per day. */
-export const DAILY_ROUTE_SEARCH_LIMIT = 5;
-
-/** Rolling window before the search limit resets (server-side). */
-// Prod: use 24 * 60 * 60 * 1000 (24 hours)
-export const ROUTE_SEARCH_WINDOW_MS = 24 * 60 * 60 * 1000 // Testing20 * 1000;
-
-/** Minimum ms between route searches (prevents accidental double-submit). */
-export const ROUTE_SEARCH_COOLDOWN_MS = 3_000;
-
-/** Autocomplete debounce. */
-export const AUTOCOMPLETE_DEBOUNCE_MS = 400;
-
 /** Reject routes longer than this — keeps the app commute-focused. */
 export const MAX_COMMUTE_MINUTES = 90;
 
 /** Reject routes farther than this (straight-line trip distance from Google). */
 export const MAX_ROUTE_DISTANCE_KM = 45;
-
-export const SESSION_COOKIE_NAME = "rid_session";
 
 export function isRouteWithinCommuteLimits(
   route: google.maps.DirectionsRoute,
