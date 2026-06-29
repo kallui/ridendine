@@ -182,40 +182,42 @@ export function RestaurantDetails({
         <DetourBadge minutes={restaurant.detourMinutes} />
       </div>
 
-      {/* Nearest stop */}
-      <div className="flex items-center gap-2 mb-2">
-        <svg
-          className="w-4 h-4 text-gray-400 flex-shrink-0"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-          aria-hidden="true"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-          />
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-          />
-        </svg>
-        <p className="text-sm text-gray-300">
-          Near{" "}
-          <span className="font-medium text-text-primary">
-            {restaurant.nearestStopName}
-          </span>
-          {restaurant.transitLineName && (
-            <span className="ml-1 text-xs text-text-muted">
-              ({restaurant.transitLineName})
+      {/* Nearest stop — only when we have a real stop name */}
+      {restaurant.nearestStopName && (
+        <div className="flex items-center gap-2 mb-2">
+          <svg
+            className="w-4 h-4 text-gray-400 flex-shrink-0"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+            />
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+            />
+          </svg>
+          <p className="text-sm text-gray-300">
+            Near{" "}
+            <span className="font-medium text-text-primary">
+              {restaurant.nearestStopName}
             </span>
-          )}
-        </p>
-      </div>
+            {restaurant.transitLineName && (
+              <span className="ml-1 text-xs text-text-muted">
+                ({restaurant.transitLineName})
+              </span>
+            )}
+          </p>
+        </div>
+      )}
 
       {/* Address */}
       {restaurant.vicinity && (

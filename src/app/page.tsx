@@ -64,6 +64,9 @@ export type SearchCircle = {
   name?: string;
 };
 
+/** How search points were resolved: real GTFS stops vs polyline sampling. */
+export type StopResolution = "gtfs" | "sampled";
+
 function MapContent() {
   const { themeMode, toggleTheme } = useThemeMode();
   const [originLabel, setOriginLabel] = useState("");
@@ -100,6 +103,9 @@ function MapContent() {
   }>({});
   const [searchCircleCache, setSearchCircleCache] = useState<{
     [routeIndex: number]: SearchCircle[];
+  }>({});
+  const [stopResolutionCache, setStopResolutionCache] = useState<{
+    [routeIndex: number]: StopResolution;
   }>({});
   const [isSearchingRestaurants, setIsSearchingRestaurants] = useState(false);
   const showBounds = true;
@@ -160,6 +166,10 @@ function MapContent() {
     selectedRouteIndex !== null
       ? (searchCircleCache[selectedRouteIndex] ?? [])
       : [];
+  const stopResolution: StopResolution =
+    selectedRouteIndex !== null
+      ? (stopResolutionCache[selectedRouteIndex] ?? "gtfs")
+      : "gtfs";
 
   // Group restaurants by their nearest stop, in route order, to feed the
   // accordion sidebar and the smart map marker filter.
@@ -351,6 +361,7 @@ function MapContent() {
         setSelectedRestaurant(null);
         setRestaurantCache({});
         setSearchCircleCache({});
+        setStopResolutionCache({});
         setRouteError(formatCommuteLimitMessage());
         return;
       }
@@ -368,6 +379,7 @@ function MapContent() {
       setSelectedRestaurant(null);
       setRestaurantCache({});
       setSearchCircleCache({});
+      setStopResolutionCache({});
     } catch (error) {
       if (directionsRequestId !== activeDirectionsRequestIdRef.current) {
         return;
@@ -473,7 +485,7 @@ function MapContent() {
               })),
             );
             console.groupEnd();
-            searchRestaurants(allPoints, routeIndex,);
+            searchRestaurants(allPoints, routeIndex, "gtfs");
             return;
           } else {
             console.warn(`[ride-n-dine] Route ${routeIndex} — GTFS returned 0 stops, falling back to polyline sampling`);
@@ -507,7 +519,7 @@ function MapContent() {
         })),
       );
       console.groupEnd();
-      searchRestaurants(allPoints, routeIndex,);
+      searchRestaurants(allPoints, routeIndex, "sampled");
       return;
     }
 
@@ -519,7 +531,7 @@ function MapContent() {
     });
     const allLastResort = [...endpoints, ...lastResortPoints];
     console.warn(`[ride-n-dine] Route ${routeIndex} — last-resort full polyline sample (${allLastResort.length} points)`);
-    searchRestaurants(allLastResort, routeIndex,);
+    searchRestaurants(allLastResort, routeIndex, "sampled");
   };
 
   // Handler: User selects a route from the alternatives
@@ -539,7 +551,9 @@ function MapContent() {
   const searchRestaurants = async (
     stopPoints: { lat: number; lng: number; name?: string; exempt?: "endpoint" | "station" }[],
     routeIndex: number,
+    stopResolution: StopResolution,
   ) => {
+    setStopResolutionCache((prev) => ({ ...prev, [routeIndex]: stopResolution }));
     const searchId = ++activeRestaurantSearchIdRef.current;
     const searchStartedAt = Date.now();
     setIsSearchingRestaurants(true);
@@ -663,6 +677,7 @@ function MapContent() {
         indexedStopPoints,
         routeIndex,
         searchId,
+        stopResolution,
         finishRestaurantSearch,
       );
     } catch (error) {
@@ -680,6 +695,7 @@ function MapContent() {
     stopPoints: { lat: number; lng: number; name?: string; stopIndex: number; routeShortName?: string }[],
     routeIndex: number,
     searchId: number,
+    stopResolution: StopResolution,
     finishRestaurantSearch: (searchId: number) => void,
   ) => {
     if (searchId !== activeRestaurantSearchIdRef.current) {
@@ -751,9 +767,11 @@ function MapContent() {
           userRatingsTotal: place.user_ratings_total,
           priceLevel: place.price_level,
           vicinity: place.vicinity,
-          nearestStopName: formatStopName(
-            nearestStop?.name ?? `Stop ${(nearestStop?.stopIndex ?? 0) + 1}`,
-          ),
+          nearestStopName: nearestStop?.name
+            ? formatStopName(nearestStop.name)
+            : stopResolution === "gtfs"
+              ? formatStopName(`Stop ${(nearestStop?.stopIndex ?? 0) + 1}`)
+              : "",
           nearestStopIndex: nearestStop?.stopIndex ?? 0,
           detourMinutes: Math.round(distanceFromRoute / 80),
           transitLineName: nearestStop?.routeShortName,
@@ -842,6 +860,7 @@ function MapContent() {
           variant="desktop"
           restaurants={restaurants}
           stopGroups={stopGroups}
+          stopResolution={stopResolution}
           selectedStopIndex={selectedStopIndex}
           onStopClick={setSelectedStopIndex}
           isSearching={isSearchingRestaurants && selectedRouteIndex !== null}
@@ -902,6 +921,7 @@ function MapContent() {
                       variant="sheet"
                       restaurants={restaurants}
                       stopGroups={stopGroups}
+                      stopResolution={stopResolution}
                       selectedStopIndex={selectedStopIndex}
                       onStopClick={setSelectedStopIndex}
                       onBack={() => setSelectedRouteIndex(null)}
