@@ -57,6 +57,27 @@ describe("fetchNearbyRestaurants", () => {
     expect(fetchMock.mock.calls[0]?.[0]).not.toContain("pagetoken=");
   });
 
+  it("does not paginate when pagination is disabled (default)", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => makePage(NEARBY_SEARCH_PAGE_SIZE, "token-page-2"),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => makePage(8),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const promise = fetchNearbyRestaurants(location, radius);
+    await vi.runAllTimersAsync();
+    const results = await promise;
+
+    expect(results).toHaveLength(NEARBY_SEARCH_PAGE_SIZE);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
   it("does not paginate when page 1 is full but has no next_page_token", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -73,6 +94,8 @@ describe("fetchNearbyRestaurants", () => {
   });
 
   it("fetches additional pages when page 1 is full and has next_page_token", async () => {
+    vi.stubEnv("NEARBY_SEARCH_PAGINATION", "true");
+
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce({
@@ -95,6 +118,8 @@ describe("fetchNearbyRestaurants", () => {
   });
 
   it("caps at three pages (60 results)", async () => {
+    vi.stubEnv("NEARBY_SEARCH_PAGINATION", "true");
+
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce({
@@ -120,6 +145,8 @@ describe("fetchNearbyRestaurants", () => {
   });
 
   it("retries pagetoken requests when Google returns INVALID_REQUEST", async () => {
+    vi.stubEnv("NEARBY_SEARCH_PAGINATION", "true");
+
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce({
