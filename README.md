@@ -22,7 +22,12 @@ Google Maps already makes it easy for drivers to find restaurants along their ro
 3. **Explore food options along the way** — RideNDine finds restaurants within a ~5-minute walk of your transit path. Search by restaurant name, and tap the restaurant cards or markers on the map for details.
 4. **Open in your maps app** — Found somewhere you like? Open it directly in your preferred maps app for walking directions and navigation.
 
-<img width="1872" height="909" alt="image" src="https://github.com/user-attachments/assets/3f314517-4062-4e5e-a611-d5f346ce1c11" />
+<img width="1876" height="890" alt="image" src="https://github.com/user-attachments/assets/b746aef4-5590-4fe8-9833-b4cb11c5b1d3" />
+
+<img width="1873" height="893" alt="image" src="https://github.com/user-attachments/assets/11bd12f6-1c41-41e5-935a-49a7698d085a" />
+
+<img width="374" height="823" alt="image" src="https://github.com/user-attachments/assets/df8112e8-f4d6-4219-b73d-4cb17cd34321" />
+
 
 ## App coverage
 
