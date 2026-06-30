@@ -1,37 +1,38 @@
-# RideNDine (Discover restaurants along your transit route)
+# RideNDine
 
 <img width="256" height="256" alt="kiki logo idle" src="https://github.com/user-attachments/assets/bf3423c1-c6f2-4f1c-bdf2-65639185c076" />
 
 
-**Your commute has better food than you think.**
+**Your transit route has better food than you think.**
+
+Discover restaurants along your public transit route.
 
 ## The problem
 
-RideNDine started from my own commute.
+RideNDine started from my own transit journey.
 
-When I started a new job in a different city, I found myself spending hours on transit every day without knowing what food options were available along my route. After work, I would often want to grab dinner on the way home, but finding places that made sense for my commute meant searching for restaurants around different stops and figuring out which ones were actually convenient to reach.
+When I started a new job in a different city, I found myself spending hours on public transit every day without knowing what food options were available along my route. After work, I would often want to grab dinner on the way home, but finding places that fit naturally into my trip meant searching for restaurants around different stops and figuring out which ones were actually convenient to reach.
 
-Google Maps already makes it easy for drivers to find restaurants along their route. For transit commuters, finding food stops that fit conveniently into their commute often requires checking stops and nearby restaurants one by one. I built RideNDine to make those discoveries easier.
+Google Maps already makes it easy for drivers to find restaurants along their route. For public transit riders, finding food stops that fit conveniently into their trip often requires checking stops and nearby restaurants one by one. I built RideNDine to make those discoveries easier.
 
 ## How it works
 
 1. **Enter your route** — Enter your starting point and destination to plan your trip.
 2. **Pick your route** — Choose the transit option that works best for you.
-3. **Explore food options along the way** — The app finds food spots within a 5-minute walk of your transit path. Filter by rating or price, and tap any pin on the map for details.
-4. **Open in Google Maps** — Found somewhere you like? Tap the card to open the place directly in Google Maps and get walking directions.
+3. **Explore food options along the way** — RideNDine finds restaurants within a ~5-minute walk of your transit path. Search by restaurant name, and tap the restaurant cards or markers on the map for details.
+4. **Open in your maps app** — Found somewhere you like? Open it directly in your preferred maps app for walking directions and navigation.
 
 <img width="1872" height="909" alt="image" src="https://github.com/user-attachments/assets/3f314517-4062-4e5e-a611-d5f346ce1c11" />
 
-## How it finds restaurants
+## App coverage
 
-- **Metro Vancouver** — Uses TransLink GTFS to place search circles at real bus stops and train stations along your route.
-- **Everywhere else** — Samples your transit path every 500 m when stop-level data isn’t available.
-- **Search area** — Each circle covers about a 5-minute walk (~400 m). Results from overlapping circles are merged so the same restaurant doesn’t show up twice.
-- **Limits** — Up to 25 search points per route to keep Google Places API usage reasonable.
+In Metro Vancouver, RideNDine uses TransLink GTFS data to search at real bus stops and train stations along your route, so nearby restaurants are linked to real stops on your trip.
+
+Elsewhere, RideNDine still works by sampling your transit path at regular intervals to find nearby restaurants. Results are less stop-specific, but discovery along your route still works. **Support for more transit systems is planned.**
 
 ## Usage limits
 
-Each session gets **5 route searches per 24 hours** to keep running the app sustainable as a personal project.
+To help keep the app sustainable as a personal project, RideNDine currently allows up to **5 route searches** within any rolling 24-hour period.
 
 ---
 

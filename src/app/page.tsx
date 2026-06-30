@@ -141,7 +141,7 @@ function MapContent() {
 
   useEffect(() => {
     if (selectedRouteIndex !== null) {
-      setIsBottomSheetExpanded(false);
+      setIsBottomSheetExpanded(true);
     }
     setSelectedStopIndex(null);
   }, [selectedRouteIndex]);
@@ -527,11 +527,13 @@ function MapContent() {
     // Cache hit: already searched this route, reuse results — no API call
     if (restaurantCache[routeIndex] !== undefined) {
       setRouteError(null);
+      setIsSearchingRestaurants(false);
       return;
     }
-    // Cache miss: first time selecting this route, search now
-    const selectedRoute = routes[routeIndex];
+    // Show loading UI immediately — GTFS stop resolution runs before Places fetch.
+    setIsSearchingRestaurants(true);
     setRouteError(null);
+    const selectedRoute = routes[routeIndex];
     void startRestaurantSearch(selectedRoute, routeIndex);
   };
 
@@ -862,7 +864,7 @@ function MapContent() {
 
             const peekLabel =
               phase === "restaurants" && isSearchingRestaurants
-                ? "Finding restaurants..."
+                ? "Searching for restaurants…"
                 : phase === "restaurants"
                   ? `${restaurants.length} restaurant${restaurants.length !== 1 ? "s" : ""}`
                   : `${routes.length} route${routes.length !== 1 ? "s" : ""} found`;
@@ -885,9 +887,22 @@ function MapContent() {
                 )}
 
                 {phase === "restaurants" && isSearchingRestaurants && (
-                  <p className="text-text-muted text-sm text-center p-8">
-                    Finding restaurants...
-                  </p>
+                  <RestaurantSidebar
+                    variant="sheet"
+                    restaurants={[]}
+                    stopGroups={[]}
+                    stopResolution={stopResolution}
+                    selectedStopIndex={selectedStopIndex}
+                    onStopClick={setSelectedStopIndex}
+                    onBack={() => setSelectedRouteIndex(null)}
+                    isSearching
+                    routeHeadline={
+                      selectedRouteIndex !== null
+                        ? getRouteHeadline(routes[selectedRouteIndex])
+                        : undefined
+                    }
+                    onRestaurantClick={() => {}}
+                  />
                 )}
 
                 {phase === "restaurants" &&

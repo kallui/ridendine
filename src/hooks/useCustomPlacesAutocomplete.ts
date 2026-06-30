@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useMapsLibrary } from "@vis.gl/react-google-maps";
 import { AUTOCOMPLETE_DEBOUNCE_MS } from "@/lib/search-config";
 
@@ -44,13 +44,19 @@ export function useCustomPlacesAutocomplete(options?: {
     useRef<google.maps.places.AutocompleteSessionToken | null>(null);
 
   // Build location bias from passed-in userLocation, falling back to Vancouver
-  const locationBias: google.maps.LatLngBoundsLiteral = options?.userLocation
-    ? (() => {
-        const { lat, lng } = options.userLocation;
-        const delta = 0.1;
-        return { north: lat + delta, south: lat - delta, east: lng + delta, west: lng - delta };
-      })()
-    : VANCOUVER_BIAS;
+  const locationBias = useMemo((): google.maps.LatLngBoundsLiteral => {
+    if (options?.userLocation) {
+      const { lat, lng } = options.userLocation;
+      const delta = 0.1;
+      return {
+        north: lat + delta,
+        south: lat - delta,
+        east: lng + delta,
+        west: lng - delta,
+      };
+    }
+    return VANCOUVER_BIAS;
+  }, [options?.userLocation]);
 
   // Create a session token once the places library is ready
   useEffect(() => {
@@ -93,7 +99,7 @@ export function useCustomPlacesAutocomplete(options?: {
     return () => {
       cancelled = true;
     };
-  }, [debouncedInput, placesLib, shouldFetchPredictions]);
+  }, [debouncedInput, placesLib, shouldFetchPredictions, locationBias]);
 
   // Rotate session token after each selection (correct billing grouping)
   const setSelectedPrediction = useCallback(

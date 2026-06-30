@@ -1,4 +1,104 @@
+import type { MouseEvent } from "react";
 import { Restaurant } from "@/app/page";
+
+// ── External maps links ──────────────────────────────────────────────────────
+
+export function getRestaurantMapsUrls(restaurant: Restaurant) {
+  const { lat, lng } = restaurant.location;
+  const google = `https://www.google.com/maps/search/?api=1&query=Google&query_place_id=${restaurant.placeId}`;
+  const params = new URLSearchParams({
+    q: restaurant.name,
+    ll: `${lat},${lng}`,
+  });
+  if (restaurant.vicinity) {
+    params.set("address", restaurant.vicinity);
+  }
+  return { google, apple: `https://maps.apple.com/?${params.toString()}` };
+}
+
+function GoogleMapsIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
+    </svg>
+  );
+}
+
+function AppleMapsIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
+    </svg>
+  );
+}
+
+const externalLinkProps = {
+  target: "_blank" as const,
+  rel: "noopener noreferrer" as const,
+};
+
+export function MapsLinks({
+  restaurant,
+  variant,
+  onLinkClick,
+}: {
+  restaurant: Restaurant;
+  variant: "card" | "popup";
+  onLinkClick?: (e: MouseEvent<HTMLAnchorElement>) => void;
+}) {
+  const { google, apple } = getRestaurantMapsUrls(restaurant);
+
+  if (variant === "card") {
+    return (
+      <div className="flex items-center shrink-0 -mr-1">
+        <a
+          href={google}
+          {...externalLinkProps}
+          onClick={onLinkClick}
+          className="p-1 text-text-muted hover:text-text-primary transition-colors"
+          aria-label="Open in Google Maps"
+        >
+          <GoogleMapsIcon className="w-3.5 h-3.5" />
+        </a>
+        <a
+          href={apple}
+          {...externalLinkProps}
+          onClick={onLinkClick}
+          className="p-1 text-text-muted hover:text-text-primary transition-colors"
+          aria-label="Open in Apple Maps"
+        >
+          <AppleMapsIcon className="w-3.5 h-3.5" />
+        </a>
+      </div>
+    );
+  }
+
+  const popupButtonClass =
+    "inline-flex flex-1 items-center justify-center gap-1.5 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors min-w-0 bg-primary hover:bg-primary-hover text-primary-fg";
+
+  return (
+    <div className="flex gap-2">
+      <a
+        href={google}
+        {...externalLinkProps}
+        onClick={onLinkClick}
+        className={popupButtonClass}
+      >
+        <GoogleMapsIcon className="w-4 h-4 shrink-0" />
+        <span className="truncate">Google Maps</span>
+      </a>
+      <a
+        href={apple}
+        {...externalLinkProps}
+        onClick={onLinkClick}
+        className={popupButtonClass}
+      >
+        <AppleMapsIcon className="w-4 h-4 shrink-0" />
+        <span className="truncate">Apple Maps</span>
+      </a>
+    </div>
+  );
+}
 
 // ── Star rating ──────────────────────────────────────────────────────────────
 
@@ -186,7 +286,7 @@ export function RestaurantDetails({
       {restaurant.nearestStopName && (
         <div className="flex items-center gap-2 mb-2">
           <svg
-            className="w-4 h-4 text-gray-400 flex-shrink-0"
+            className="w-4 h-4 text-text-muted flex-shrink-0"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -205,7 +305,7 @@ export function RestaurantDetails({
               d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
             />
           </svg>
-          <p className="text-sm text-gray-300">
+          <p className="text-sm text-text-secondary">
             Near{" "}
             <span className="font-medium text-text-primary">
               {restaurant.nearestStopName}
@@ -226,18 +326,7 @@ export function RestaurantDetails({
         </p>
       )}
 
-      {/* Google Maps link */}
-      <a
-        href={`https://www.google.com/maps/search/?api=1&query=Google&query_place_id=${restaurant.placeId}`}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-primary hover:bg-primary-hover text-primary-fg text-sm font-medium rounded-lg transition-colors w-full justify-center shadow-sm"
-      >
-        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-          <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
-        </svg>
-        View on Google Maps
-      </a>
+      <MapsLinks restaurant={restaurant} variant="popup" />
     </>
   );
 }
