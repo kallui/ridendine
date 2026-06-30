@@ -3,7 +3,7 @@
 import { Restaurant, StopGroup, StopResolution } from "@/app/page";
 import StopGroupCard from "./StopGroupCard";
 import RestaurantCard from "./RestaurantCard";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 
 interface RestaurantSidebarProps {
   restaurants: Restaurant[];
@@ -34,6 +34,7 @@ export default function RestaurantSidebar({
 }: RestaurantSidebarProps) {
   const isSampled = stopResolution === "sampled";
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const panelCollapsed = isCollapsed && !isSearching;
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedStops, setExpandedStops] = useState<Set<number>>(new Set());
   const [collapsedSelectedStops, setCollapsedSelectedStops] = useState<
@@ -42,12 +43,6 @@ export default function RestaurantSidebar({
   const [prevSelectedStopIndex, setPrevSelectedStopIndex] = useState(
     selectedStopIndex,
   );
-
-  useEffect(() => {
-    if (isSearching) {
-      setIsCollapsed(false);
-    }
-  }, [isSearching]);
 
   if (selectedStopIndex !== prevSelectedStopIndex) {
     setPrevSelectedStopIndex(selectedStopIndex);
@@ -263,10 +258,10 @@ export default function RestaurantSidebar({
     <>
       <div
         className={`hidden lg:block absolute top-20 right-0 z-20 h-[calc(100vh-6rem)] bg-card-bg shadow-2xl border border-border rounded-tl-xl rounded-bl-xl transition-all duration-300 ease-in-out ${
-          isCollapsed ? "w-0" : "w-96"
+          panelCollapsed ? "w-0" : "w-96"
         }`}
       >
-        {!isCollapsed && (
+        {!panelCollapsed && (
           <div className="h-full flex flex-col">
             <div className="px-4 py-3 border-b border-border shrink-0">
               <div className="flex items-start justify-between gap-2">
@@ -311,7 +306,7 @@ export default function RestaurantSidebar({
         )}
       </div>
 
-      {isCollapsed && (
+      {panelCollapsed && (
         <button
           onClick={() => setIsCollapsed(false)}
           className="hidden sm:block absolute top-1/2 right-4 -translate-y-1/2 z-20 bg-card-bg shadow-lg border border-border p-3 rounded-full hover:bg-app-bg transition-colors"
