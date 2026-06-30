@@ -65,6 +65,15 @@ export const NEARBY_SEARCH_PAGE_SIZE = 20;
 /** Legacy Nearby Search allows up to 3 pages (60 results) per circle. */
 export const NEARBY_SEARCH_MAX_PAGES = 3;
 
+/**
+ * Fetch pages 2–3 of Nearby Search (up to 60 results per circle).
+ * Off by default — each extra page is a billable call × every stop on the route.
+ * Set NEARBY_SEARCH_PAGINATION=true to enable.
+ */
+export function isNearbySearchPaginationEnabled(): boolean {
+  return process.env.NEARBY_SEARCH_PAGINATION === "true";
+}
+
 /** Google requires a short delay before a next_page_token becomes valid. */
 export const NEARBY_PAGE_TOKEN_DELAY_MS = 2000;
 
@@ -129,6 +138,10 @@ function shouldFetchNextPage(
   nextPageToken: string | undefined,
   pagesFetched: number,
 ): boolean {
+  if (!isNearbySearchPaginationEnabled()) {
+    return false;
+  }
+
   return (
     pagesFetched < NEARBY_SEARCH_MAX_PAGES &&
     pageResults.length === NEARBY_SEARCH_PAGE_SIZE &&
