@@ -69,8 +69,8 @@ export default function AboutLayout({
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-text-secondary hover:text-text-primary transition-colors"
-              aria-label="View on GitHub"
-              title="View on GitHub"
+              aria-label="View repo on GitHub"
+              title="View repo on GitHub"
             >
               <svg
                 className="h-5 w-5"
@@ -86,8 +86,8 @@ export default function AboutLayout({
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-text-secondary hover:text-text-primary transition-colors"
-              aria-label="View on LinkedIn"
-              title="View on LinkedIn"
+              aria-label="Nicholas Januar"
+              title="Nicholas Januar"
             >
               <svg
                 className="h-5 w-5"
