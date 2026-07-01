@@ -13,14 +13,34 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const SITE_NAME = "RideNDine";
+const SITE_DESCRIPTION =
+  "Discover restaurants and food stops along your public transit route. RideNDine helps commuters find convenient places to eat without searching through every stop along the way.";
+const SITE_URL = "https://www.ridendine.app";
+
 export const metadata: Metadata = {
-  title: "RideNDine",
-  description: "Discover restaurants and food stops along your commute route.",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: SITE_NAME,
+    template: `%s | ${SITE_NAME}`,
+  },
+  description: SITE_DESCRIPTION,
+  applicationName: SITE_NAME,
+  openGraph: {
+    type: "website",
+    siteName: SITE_NAME,
+    title: SITE_NAME,
+    description: SITE_DESCRIPTION,
+    url: SITE_URL,
+  },
+  twitter: {
+    card: "summary",
+    title: SITE_NAME,
+    description: SITE_DESCRIPTION,
+  },
   icons: {
-    icon: [{ url: "/logo-64.png", sizes: "64x64", type: "image/png" }],
-    apple: [
-      { url: "/icons/apple-icon-180.png", sizes: "180x180", type: "image/png" },
-    ],
+    icon: "/favicon.ico",
+    apple: "/icons/apple-icon-180.png",
   },
   //  appleTouchIcon: "/apple-icon-180.png"
   appleWebApp: {
@@ -201,6 +221,13 @@ export const metadata: Metadata = {
   },
 };
 
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  name: SITE_NAME,
+  url: SITE_URL,
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -208,7 +235,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <head></head>
+      <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
