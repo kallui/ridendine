@@ -1,9 +1,7 @@
 import RBush from "rbush";
 import { unzipSync } from "fflate";
 import { formatStopName } from "@/lib/format-stop-name";
-
-const GTFS_URL =
-  "https://gtfs-static.translink.ca/gtfs/google_transit.zip";
+import type { GtfsFeedSource } from "@/lib/gtfs-feeds";
 
 // ---- Types ----------------------------------------------------------------
 
@@ -30,43 +28,63 @@ type GtfsIndex = {
   routeStops: Map<string, Map<number, string[]>>;
 };
 
-// ---- Singleton cache -------------------------------------------------------
+// ---- Per-feed cache -------------------------------------------------------
 
-let cachedIndex: GtfsIndex | null = null;
-let loadPromise: Promise<GtfsIndex> | null = null;
+const cachedIndexes = new Map<string, GtfsIndex>();
+const loadPromises = new Map<string, Promise<GtfsIndex>>();
 
-export async function getGtfsIndex(): Promise<GtfsIndex> {
-  if (cachedIndex) return cachedIndex;
-  if (loadPromise) return loadPromise;
+export async function getGtfsIndex(feed: GtfsFeedSource): Promise<GtfsIndex> {
+  const cached = cachedIndexes.get(feed.id);
+  if (cached) return cached;
 
-  loadPromise = loadGtfs()
+  const inFlight = loadPromises.get(feed.id);
+  if (inFlight) return inFlight;
+
+  const promise = loadGtfs(feed)
     .then((idx) => {
-      cachedIndex = idx;
-      loadPromise = null;
+      cachedIndexes.set(feed.id, idx);
+      loadPromises.delete(feed.id);
       return idx;
     })
     .catch((err) => {
-      loadPromise = null;
+      loadPromises.delete(feed.id);
       throw err;
     });
 
-  return loadPromise;
+  loadPromises.set(feed.id, promise);
+  return promise;
 }
 
 // ---- GTFS loading ---------------------------------------------------------
 
-async function loadGtfs(): Promise<GtfsIndex> {
-  const t = Date.now();
-  console.log("[GTFS] Fetching TransLink GTFS zip…");
+function findZipEntry(
+  files: Record<string, Uint8Array>,
+  filename: string,
+): Uint8Array | undefined {
+  if (files[filename]) return files[filename];
 
-  const res = await fetch(GTFS_URL, { next: { revalidate: 0 } });
-  if (!res.ok) throw new Error(`GTFS fetch failed: HTTP ${res.status}`);
+  const suffix = `/${filename}`;
+  for (const [path, buf] of Object.entries(files)) {
+    if (path.endsWith(suffix) || path === filename) return buf;
+  }
+
+  return undefined;
+}
+
+async function loadGtfs(feed: GtfsFeedSource): Promise<GtfsIndex> {
+  const t = Date.now();
+  console.log(`[GTFS] Fetching ${feed.name} (${feed.id})…`);
+
+  const res = await fetch(feed.url, { next: { revalidate: 0 } });
+  if (!res.ok) {
+    throw new Error(`GTFS fetch failed for ${feed.id}: HTTP ${res.status}`);
+  }
 
   const zipBuffer = new Uint8Array(await res.arrayBuffer());
   const files = unzipSync(zipBuffer);
 
   const decode = (name: string): string => {
-    const buf = files[name];
+    const buf = findZipEntry(files, name);
     if (!buf) throw new Error(`GTFS zip is missing expected file: ${name}`);
     return new TextDecoder("utf-8").decode(buf);
   };
@@ -90,7 +108,7 @@ async function loadGtfs(): Promise<GtfsIndex> {
 
   const ms = Date.now() - t;
   console.log(
-    `[GTFS] Ready — ${stops.size} stops, ${routesByShortName.size} routes (${ms} ms)`,
+    `[GTFS] Ready (${feed.id}) — ${stops.size} stops, ${routesByShortName.size} routes (${ms} ms)`,
   );
 
   return { stops, tree, routesByShortName, routeStops };

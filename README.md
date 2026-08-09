@@ -32,11 +32,9 @@ Google Maps already makes it easy for drivers to find restaurants along their ro
 
 ## App coverage
 
-In Metro Vancouver, RideNDine uses TransLink GTFS data to search at real bus stops and train stations along your route, so nearby restaurants are linked to real stops on your trip.
+In supported cities (see `src/lib/gtfs-feeds.ts`), RideNDine uses public GTFS feeds to search at real bus stops and train stations along your route, so nearby restaurants are linked to real stops on your trip.
 
-Elsewhere, RideNDine still works by sampling your transit path at regular intervals to find nearby restaurants. Results are less stop-specific, but discovery along your route still works. 
-
-**Support for more transit systems is planned.**
+Elsewhere, RideNDine still works by sampling your transit path at regular intervals to find nearby restaurants. Results are less stop-specific, but discovery along your route still works.
 
 ## Usage limits
 
