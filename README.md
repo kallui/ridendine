@@ -32,7 +32,9 @@ Google Maps already makes it easy for drivers to find restaurants along their ro
 
 ## App coverage
 
-In supported cities (see `src/lib/gtfs-feeds.ts`), RideNDine uses public GTFS feeds to search at real bus stops and train stations along your route, so nearby restaurants are linked to real stops on your trip.
+In registered metro regions, RideNDine uses public GTFS feeds to search at real bus stops and train stations along your route, so nearby restaurants are linked to real stops on your trip.
+
+See [`docs/COVERED_CITIES.md`](docs/COVERED_CITIES.md) for which municipalities each feed covers (one feed often spans many cities — e.g. TransLink across Metro Vancouver). Runtime feed URLs and bounds live in `src/lib/gtfs-feeds.ts`. Smoke-test feeds locally before treating them as production-ready.
 
 Elsewhere, RideNDine still works by sampling your transit path at regular intervals to find nearby restaurants. Results are less stop-specific, but discovery along your route still works.
 

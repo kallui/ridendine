@@ -402,10 +402,26 @@ function MapContent() {
     const destinationName =
       route.legs[route.legs.length - 1]?.end_address?.split(",")[0] ??
       "Destination";
-    const endpoints = [
-      origin ? { ...origin, name: originName, exempt: "endpoint" as const } : null,
-      destination ? { ...destination, name: destinationName, exempt: "endpoint" as const } : null,
-    ].filter((p): p is { lat: number; lng: number; name: string; exempt: "endpoint" } => p !== null);
+    const originPoint = origin
+      ? { ...origin, name: originName, exempt: "endpoint" as const }
+      : null;
+    const destinationPoint = destination
+      ? { ...destination, name: destinationName, exempt: "endpoint" as const }
+      : null;
+
+    /** Origin → mid-route stops → destination (sidebar groups follow the trip). */
+    const inJourneyOrder = (
+      mid: {
+        lat: number;
+        lng: number;
+        name?: string;
+        exempt?: "endpoint" | "station";
+      }[],
+    ) => [
+      ...(originPoint ? [originPoint] : []),
+      ...mid,
+      ...(destinationPoint ? [destinationPoint] : []),
+    ];
 
     // Collect transit step data needed for GTFS lookup
     type TransitStepInput = {
@@ -460,12 +476,12 @@ function MapContent() {
               ...s,
               exempt: /\bstation\b/i.test(s.name) ? ("station" as const) : undefined,
             }));
-            const allPoints = [...endpoints, ...taggedStops];
+            const allPoints = inJourneyOrder(taggedStops);
             console.group(`[ride-n-dine] Route ${routeIndex} — GTFS stop points (${allPoints.length} total)`);
             console.table(
               allPoints.map((p, i) => ({
                 "#": i,
-                source: i < endpoints.length ? "endpoint" : "GTFS",
+                source: p.exempt === "endpoint" ? "endpoint" : "GTFS",
                 name: p.name ?? "(unnamed)",
                 lat: p.lat.toFixed(5),
                 lng: p.lng.toFixed(5),
@@ -490,12 +506,12 @@ function MapContent() {
         searchIntervalKm: fallbackSearchInterval,
         apiSearchRadiusM: searchRadius,
       });
-      const allPoints = [...endpoints, ...fallbackPoints];
+      const allPoints = inJourneyOrder(fallbackPoints);
       console.group(`[ride-n-dine] Route ${routeIndex} — fallback polyline sample points (${allPoints.length} total)`);
       console.table(
         allPoints.map((p, i) => ({
           "#": i,
-          source: i < endpoints.length ? "endpoint" : "polyline-sample",
+          source: p.exempt === "endpoint" ? "endpoint" : "polyline-sample",
           name: (p as { name?: string }).name ?? "(unnamed)",
           lat: p.lat.toFixed(5),
           lng: p.lng.toFixed(5),
@@ -512,7 +528,7 @@ function MapContent() {
       searchIntervalKm: fallbackSearchInterval,
       apiSearchRadiusM: searchRadius,
     });
-    const allLastResort = [...endpoints, ...lastResortPoints];
+    const allLastResort = inJourneyOrder(lastResortPoints);
     console.warn(`[ride-n-dine] Route ${routeIndex} — last-resort full polyline sample (${allLastResort.length} points)`);
     searchRestaurants(allLastResort, routeIndex, "sampled");
   };

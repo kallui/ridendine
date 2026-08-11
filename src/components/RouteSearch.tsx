@@ -3,8 +3,33 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useCustomPlacesAutocomplete } from "@/hooks/useCustomPlacesAutocomplete";
+import type { AutocompletePrediction } from "@/hooks/useCustomPlacesAutocomplete";
 
 import type { QuotaResult } from "@/lib/rate-limit/types";
+
+/** Label passed to directions — resolved to GPS coords in page.tsx */
+const CURRENT_LOCATION_LABEL = "Current Location";
+const CURRENT_LOCATION_PLACE_ID = "__current_location__";
+
+const CURRENT_LOCATION_PREDICTION: AutocompletePrediction = {
+  description: CURRENT_LOCATION_LABEL,
+  place_id: CURRENT_LOCATION_PLACE_ID,
+};
+
+function isCurrentLocationPrediction(
+  prediction: AutocompletePrediction | null | undefined,
+): boolean {
+  return prediction?.place_id === CURRENT_LOCATION_PLACE_ID;
+}
+
+function waypointFromField(
+  prediction: AutocompletePrediction | null,
+  input: string,
+): string | google.maps.Place {
+  if (isCurrentLocationPrediction(prediction)) return CURRENT_LOCATION_LABEL;
+  if (prediction) return { placeId: prediction.place_id };
+  return input;
+}
 
 interface RouteSearchProps {
   onSearch: (
@@ -31,13 +56,19 @@ function PredictionList({
   onSelect,
   onHover,
   onLeave,
+  showCurrentLocation = false,
+  onSelectCurrentLocation,
 }: {
   predictions: Array<{ place_id: string; description: string }>;
   activeIndex: number | null;
-  onSelect: (i: number) => void;
-  onHover: (i: number) => void;
+  onSelect: (predictionIndex: number) => void;
+  onHover: (listIndex: number) => void;
   onLeave: () => void;
+  showCurrentLocation?: boolean;
+  onSelectCurrentLocation?: () => void;
 }) {
+  const offset = showCurrentLocation ? 1 : 0;
+
   return (
     <motion.ul
       initial={{ opacity: 0, y: -4 }}
@@ -46,24 +77,49 @@ function PredictionList({
       transition={{ duration: 0.15 }}
       className="absolute z-50 top-full left-0 right-0 mt-1 bg-card-bg border border-border rounded-md shadow-xl overflow-hidden"
     >
-      {predictions.map((p, i) => (
+      {showCurrentLocation && (
         <li
-          key={p.place_id}
           onMouseDown={(e) => {
             e.preventDefault();
-            onSelect(i);
+            onSelectCurrentLocation?.();
           }}
-          onMouseEnter={() => onHover(i)}
+          onMouseEnter={() => onHover(0)}
           onMouseLeave={onLeave}
-          className={`px-4 py-2 text-sm cursor-pointer transition-colors ${
-            i === activeIndex
+          className={`px-4 py-2.5 text-sm cursor-pointer transition-colors flex items-center gap-2.5 ${
+            activeIndex === 0
               ? "bg-accent-soft text-text-primary"
               : "text-text-secondary hover:bg-accent-soft/60"
           }`}
         >
-          {p.description}
+          <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
+            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+              <path d="M12 8a4 4 0 100 8 4 4 0 000-8zm8.94 3A8.994 8.994 0 0013 3.06V1h-2v2.06A8.994 8.994 0 003.06 11H1v2h2.06A8.994 8.994 0 0011 20.94V23h2v-2.06A8.994 8.994 0 0020.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z" />
+            </svg>
+          </span>
+          <span className="font-medium text-primary">Current location</span>
         </li>
-      ))}
+      )}
+      {predictions.map((p, i) => {
+        const listIndex = i + offset;
+        return (
+          <li
+            key={p.place_id}
+            onMouseDown={(e) => {
+              e.preventDefault();
+              onSelect(i);
+            }}
+            onMouseEnter={() => onHover(listIndex)}
+            onMouseLeave={onLeave}
+            className={`px-4 py-2 text-sm cursor-pointer transition-colors ${
+              activeIndex === listIndex
+                ? "bg-accent-soft text-text-primary"
+                : "text-text-secondary hover:bg-accent-soft/60"
+            }`}
+          >
+            {p.description}
+          </li>
+        );
+      })}
     </motion.ul>
   );
 }
@@ -98,6 +154,11 @@ export default function RouteSearch({
   quota = null,
 }: RouteSearchProps) {
   const skipNextAutoSearchRef = useRef(false);
+  // After the first completed search, editing O/D must use Search / Enter.
+  // Ref keeps auto-search effect deps stable (avoids HMR dep-array size errors).
+  const requireExplicitSearchRef = useRef(
+    Boolean(defaultOrigin && defaultDestination),
+  );
   const originInputRef = useRef<HTMLInputElement>(null);
   const destInputRef = useRef<HTMLInputElement>(null);
 
@@ -145,6 +206,12 @@ export default function RouteSearch({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [defaultOrigin]);
 
+  useEffect(() => {
+    if (defaultOrigin && defaultDestination) {
+      requireExplicitSearchRef.current = true;
+    }
+  }, [defaultOrigin, defaultDestination]);
+
   // Focus the destination input programmatically rather than using autoFocus.
   // autoFocus fires the native DOM focus before React's handlers are attached
   // (SSR hydration timing), so onFocus never fires and focusedField stays null.
@@ -182,21 +249,25 @@ export default function RouteSearch({
 
   // ── Auto-search effects ───────────────────────────────────────────────────────
 
-  // "both" mode: fire when either autocomplete selection changes.
+  // "both" mode: auto-search only before the first completed search.
+  // After that, user must press Search / Enter (avoids quota waste while editing).
   useEffect(() => {
     if (phase !== "both") return;
+    if (requireExplicitSearchRef.current) return;
     if (skipNextAutoSearchRef.current) {
       skipNextAutoSearchRef.current = false;
       return;
     }
     if (!originAC.selectedPrediction && !destAC.selectedPrediction) return;
 
-    const origin = originAC.selectedPrediction
-      ? { placeId: originAC.selectedPrediction.place_id }
-      : originAC.input;
-    const destination = destAC.selectedPrediction
-      ? { placeId: destAC.selectedPrediction.place_id }
-      : destAC.input;
+    const origin = waypointFromField(
+      originAC.selectedPrediction,
+      originAC.input,
+    );
+    const destination = waypointFromField(
+      destAC.selectedPrediction,
+      destAC.input,
+    );
 
     if (!origin) { originInputRef.current?.focus(); return; }
     if (!destination) { destInputRef.current?.focus(); return; }
@@ -206,14 +277,16 @@ export default function RouteSearch({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [originAC.selectedPrediction, destAC.selectedPrediction]);
 
-  // "dest-only" mode: fire when user picks from autocomplete.
+  // "dest-only" mode: fire when user picks from autocomplete (first-search flow).
   useEffect(() => {
     if (phase !== "dest-only") return;
+    if (requireExplicitSearchRef.current) return;
     if (!destAC.selectedPrediction) return;
-    proceedFromDest(
-      { placeId: destAC.selectedPrediction.place_id },
+    const dest = waypointFromField(
+      destAC.selectedPrediction,
       destAC.input,
     );
+    proceedFromDest(dest, destAC.input);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [destAC.selectedPrediction]);
 
@@ -235,12 +308,17 @@ export default function RouteSearch({
     destAC.setInput(nextDestinationInput);
     destAC.setSelectedPrediction(nextDestinationPrediction);
 
-    const nextOrigin = nextOriginPrediction
-      ? { placeId: nextOriginPrediction.place_id }
-      : nextOriginInput;
-    const nextDestination = nextDestinationPrediction
-      ? { placeId: nextDestinationPrediction.place_id }
-      : nextDestinationInput;
+    // After a completed search, swap only updates fields — user confirms via Search.
+    if (requireExplicitSearchRef.current) return;
+
+    const nextOrigin = waypointFromField(
+      nextOriginPrediction,
+      nextOriginInput,
+    );
+    const nextDestination = waypointFromField(
+      nextDestinationPrediction,
+      nextDestinationInput,
+    );
 
     if (nextOrigin && nextDestination && !searchDisabled) {
       onSearch(
@@ -256,19 +334,13 @@ export default function RouteSearch({
     e.preventDefault();
     if (phase === "dest-only") {
       proceedFromDest(
-        destAC.selectedPrediction
-          ? { placeId: destAC.selectedPrediction.place_id }
-          : destAC.input,
+        waypointFromField(destAC.selectedPrediction, destAC.input),
         destAC.input,
       );
       return;
     }
-    const o = originAC.selectedPrediction
-      ? { placeId: originAC.selectedPrediction.place_id }
-      : originAC.input;
-    const d = destAC.selectedPrediction
-      ? { placeId: destAC.selectedPrediction.place_id }
-      : destAC.input;
+    const o = waypointFromField(originAC.selectedPrediction, originAC.input);
+    const d = waypointFromField(destAC.selectedPrediction, destAC.input);
     if (o && d && !searchDisabled) onSearch(o, d, originAC.input, destAC.input);
   };
 
@@ -284,12 +356,27 @@ export default function RouteSearch({
     if (destAC.selectedPrediction) destAC.setSelectedPrediction(null);
   };
 
+  const selectCurrentLocationOrigin = () => {
+    originAC.setInput(CURRENT_LOCATION_LABEL);
+    originAC.setSelectedPrediction(CURRENT_LOCATION_PREDICTION);
+    originAC.setActiveIndex(null);
+    setFocusedField(null);
+  };
+
+  const selectCurrentLocationDest = () => {
+    destAC.setInput(CURRENT_LOCATION_LABEL);
+    destAC.setSelectedPrediction(CURRENT_LOCATION_PREDICTION);
+    destAC.setActiveIndex(null);
+    setFocusedField(null);
+  };
+
   const selectOriginPrediction = (index: number) => {
     const selected = originAC.predictions[index];
     if (!selected) return;
     originAC.setInput(selected.description);
     originAC.setSelectedPrediction(selected);
     originAC.setActiveIndex(null);
+    setFocusedField(null);
   };
 
   const selectDestPrediction = (index: number) => {
@@ -298,6 +385,7 @@ export default function RouteSearch({
     destAC.setInput(selected.description);
     destAC.setSelectedPrediction(selected);
     destAC.setActiveIndex(null);
+    setFocusedField(null);
   };
 
   const handleClearOrigin = () => {
@@ -311,16 +399,29 @@ export default function RouteSearch({
     destAC.setInput("");
     destAC.setSelectedPrediction(null);
     destAC.setActiveIndex(null);
-    if (phase === "dest-only") {
-      destInputRef.current?.focus();
-    } else {
-      destInputRef.current?.focus();
-    }
+    destInputRef.current?.focus();
   };
 
+  const originShowsCurrentLocation =
+    Boolean(userLocation) &&
+    originAC.input.trim().toLowerCase() !== "current location";
+
+  const destShowsCurrentLocation =
+    Boolean(userLocation) &&
+    destAC.input.trim().toLowerCase() !== "current location";
+
+  const originListMax =
+    (originShowsCurrentLocation ? 1 : 0) + originAC.predictions.length - 1;
+  const destListMax =
+    (destShowsCurrentLocation ? 1 : 0) + destAC.predictions.length - 1;
+
+  const canSubmitBoth =
+    Boolean(originAC.input.trim() && destAC.input.trim()) && !searchDisabled;
+
   const handleOriginKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    const max = originAC.predictions.length - 1;
+    const max = originListMax;
     if (e.key === "ArrowDown") {
+      if (max < 0) return;
       e.preventDefault();
       originAC.setActiveIndex(
         originAC.activeIndex === null ? 0 : Math.min(originAC.activeIndex + 1, max),
@@ -328,6 +429,7 @@ export default function RouteSearch({
       return;
     }
     if (e.key === "ArrowUp") {
+      if (max < 0) return;
       e.preventDefault();
       originAC.setActiveIndex(
         originAC.activeIndex === null ? max : Math.max(originAC.activeIndex - 1, 0),
@@ -336,15 +438,22 @@ export default function RouteSearch({
     }
     if (e.key === "Enter" && originAC.activeIndex !== null && max >= 0) {
       e.preventDefault();
-      selectOriginPrediction(originAC.activeIndex);
+      const idx = originAC.activeIndex;
+      if (originShowsCurrentLocation && idx === 0) {
+        selectCurrentLocationOrigin();
+      } else {
+        selectOriginPrediction(originShowsCurrentLocation ? idx - 1 : idx);
+      }
       return;
     }
+    // Enter with no highlighted suggestion → native form submit
     if (e.key === "Escape") originAC.setActiveIndex(null);
   };
 
   const handleDestKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    const max = destAC.predictions.length - 1;
+    const max = destListMax;
     if (e.key === "ArrowDown") {
+      if (max < 0) return;
       e.preventDefault();
       destAC.setActiveIndex(
         destAC.activeIndex === null ? 0 : Math.min(destAC.activeIndex + 1, max),
@@ -352,6 +461,7 @@ export default function RouteSearch({
       return;
     }
     if (e.key === "ArrowUp") {
+      if (max < 0) return;
       e.preventDefault();
       destAC.setActiveIndex(
         destAC.activeIndex === null ? max : Math.max(destAC.activeIndex - 1, 0),
@@ -359,17 +469,25 @@ export default function RouteSearch({
       return;
     }
     if (e.key === "Enter") {
-      e.preventDefault();
+      // Highlighted suggestion → pick it; otherwise let the form submit / go.
       if (destAC.activeIndex !== null && max >= 0) {
-        selectDestPrediction(destAC.activeIndex);
-      } else if (phase === "dest-only") {
+        e.preventDefault();
+        const idx = destAC.activeIndex;
+        if (destShowsCurrentLocation && idx === 0) {
+          selectCurrentLocationDest();
+        } else {
+          selectDestPrediction(destShowsCurrentLocation ? idx - 1 : idx);
+        }
+        return;
+      }
+      if (phase === "dest-only") {
+        e.preventDefault();
         proceedFromDest(
-          destAC.selectedPrediction
-            ? { placeId: destAC.selectedPrediction.place_id }
-            : destAC.input,
+          waypointFromField(destAC.selectedPrediction, destAC.input),
           destAC.input,
         );
       }
+      // both mode: do not preventDefault → form onSubmit runs (desktop Enter / mobile Search)
       return;
     }
     if (e.key === "Escape") destAC.setActiveIndex(null);
@@ -377,15 +495,23 @@ export default function RouteSearch({
 
   // ── Dropdown visibility ───────────────────────────────────────────────────────
 
+  const originHasCommittedSelection =
+    originAC.selectedPrediction !== null &&
+    originAC.selectedPrediction.description === originAC.input;
+
+  const destHasCommittedSelection =
+    destAC.selectedPrediction !== null &&
+    destAC.selectedPrediction.description === destAC.input;
+
   const showOriginDropdown =
     focusedField === "origin" &&
-    originAC.predictions.length > 0 &&
-    originAC.selectedPrediction?.description !== originAC.input;
+    !originHasCommittedSelection &&
+    (originShowsCurrentLocation || originAC.predictions.length > 0);
 
   const showDestDropdown =
     focusedField === "destination" &&
-    destAC.predictions.length > 0 &&
-    destAC.selectedPrediction?.description !== destAC.input;
+    !destHasCommittedSelection &&
+    (destShowsCurrentLocation || destAC.predictions.length > 0);
 
 
   // ── Render ────────────────────────────────────────────────────────────────────
@@ -483,6 +609,7 @@ export default function RouteSearch({
                     ref={destInputRef}
                     type="text"
                     autoComplete="off"
+                    enterKeyHint="search"
                     placeholder="Where to?"
                     value={destAC.input}
                     onChange={handleDestChange}
@@ -525,6 +652,8 @@ export default function RouteSearch({
                         onSelect={selectDestPrediction}
                         onHover={(i) => destAC.setActiveIndex(i)}
                         onLeave={() => destAC.setActiveIndex(null)}
+                        showCurrentLocation={destShowsCurrentLocation}
+                        onSelectCurrentLocation={selectCurrentLocationDest}
                       />
                     )}
                   </AnimatePresence>
@@ -545,6 +674,7 @@ export default function RouteSearch({
                     ref={destInputRef}
                     type="text"
                     autoComplete="off"
+                    enterKeyHint="search"
                     placeholder="Where to?"
                     value={destAC.input}
                     onChange={handleDestChange}
@@ -587,6 +717,8 @@ export default function RouteSearch({
                         onSelect={selectDestPrediction}
                         onHover={(i) => destAC.setActiveIndex(i)}
                         onLeave={() => destAC.setActiveIndex(null)}
+                        showCurrentLocation={destShowsCurrentLocation}
+                        onSelectCurrentLocation={selectCurrentLocationDest}
                       />
                     )}
                   </AnimatePresence>
@@ -633,6 +765,7 @@ export default function RouteSearch({
                     type="text"
                     id="origin"
                     autoComplete="off"
+                    enterKeyHint="next"
                     placeholder="Starting point"
                     value={originAC.input}
                     onChange={handleOriginChange}
@@ -664,6 +797,8 @@ export default function RouteSearch({
                         onSelect={selectOriginPrediction}
                         onHover={(i) => originAC.setActiveIndex(i)}
                         onLeave={() => originAC.setActiveIndex(null)}
+                        showCurrentLocation={originShowsCurrentLocation}
+                        onSelectCurrentLocation={selectCurrentLocationOrigin}
                       />
                     )}
                   </AnimatePresence>
@@ -676,6 +811,7 @@ export default function RouteSearch({
                     type="text"
                     id="destination"
                     autoComplete="off"
+                    enterKeyHint="search"
                     placeholder="Destination"
                     value={destAC.input}
                     onChange={handleDestChange}
@@ -685,31 +821,20 @@ export default function RouteSearch({
                     className={`w-full pl-4 py-2 sm:py-2.5 border border-border rounded-md
                       bg-app-bg text-text-primary placeholder:text-text-muted
                       focus:outline-none focus:ring-2 focus:ring-accent-ring/70
-                      ${destAC.input ? "pr-14" : "pr-9"}`}
+                      ${destAC.input ? "pr-8" : "pr-4"}`}
                   />
-                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
-                    {destAC.input && (
-                      <button
-                        type="button"
-                        onMouseDown={(e) => { e.preventDefault(); handleClearDest(); }}
-                        className="p-1 text-text-muted hover:text-text-primary transition-colors"
-                        aria-label="Clear destination"
-                      >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    )}
+                  {destAC.input && (
                     <button
-                      type="submit"
-                      className="p-1 text-text-muted hover:text-text-primary transition-colors"
-                      aria-label="Search"
+                      type="button"
+                      onMouseDown={(e) => { e.preventDefault(); handleClearDest(); }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-text-primary transition-colors"
+                      aria-label="Clear destination"
                     >
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                       </svg>
                     </button>
-                  </div>
+                  )}
                   <AnimatePresence>
                     {showDestDropdown && (
                       <PredictionList
@@ -718,35 +843,61 @@ export default function RouteSearch({
                         onSelect={selectDestPrediction}
                         onHover={(i) => destAC.setActiveIndex(i)}
                         onLeave={() => destAC.setActiveIndex(null)}
+                        showCurrentLocation={destShowsCurrentLocation}
+                        onSelectCurrentLocation={selectCurrentLocationDest}
                       />
                     )}
                   </AnimatePresence>
                 </div>
               </div>
 
-              {/* Swap button */}
-              <button
-                type="button"
-                onClick={handleSwap}
-                title="Swap origin and destination"
-                aria-label="Swap origin and destination"
-                className="absolute right-0 top-1/2 -translate-y-1/2 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-card-bg/90 text-text-muted hover:text-text-primary hover:border-text-muted transition-colors"
-              >
-                <svg
-                  className="h-4 w-4 rotate-90"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
+              {/* Swap + search on the right */}
+              <div className="absolute right-0 top-1/2 z-20 flex -translate-y-1/2 flex-col gap-3">
+                <button
+                  type="button"
+                  onClick={handleSwap}
+                  title="Swap origin and destination"
+                  aria-label="Swap origin and destination"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-card-bg/90 text-text-muted transition-colors hover:border-text-muted hover:text-text-primary"
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.8}
-                    d="M8 7V4m0 0L5.5 6.5M8 4l2.5 2.5M16 17v3m0 0-2.5-2.5M16 20l2.5-2.5M7 7h10M7 17h10"
-                  />
-                </svg>
-              </button>
+                  <svg
+                    className="h-4 w-4 rotate-90"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.8}
+                      d="M8 7V4m0 0L5.5 6.5M8 4l2.5 2.5M16 17v3m0 0-2.5-2.5M16 20l2.5-2.5M7 7h10M7 17h10"
+                    />
+                  </svg>
+                </button>
+                <button
+                  type="submit"
+                  disabled={!canSubmitBoth}
+                  title="Search route"
+                  aria-label="Search route"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-fg shadow-sm transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <svg
+                    className="h-4 w-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
 
