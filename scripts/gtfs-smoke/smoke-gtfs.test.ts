@@ -59,6 +59,9 @@ type RouteGtfsResult = {
 
 type CaseReport = {
   id: string;
+  label: string;
+  regionName: string;
+  agencyName: string;
   intent: string;
   origin: string;
   destination: string;
@@ -69,6 +72,26 @@ type CaseReport = {
 };
 
 const caseReports: CaseReport[] = [];
+
+function caseLabel(smokeCase: GtfsSmokeCase): string {
+  const region = GTFS_CITIES.find((r) => r.id === smokeCase.regionId);
+  const feed = region?.feeds.find((f) => f.id === smokeCase.expectedFeedId);
+  const regionName = region?.name ?? smokeCase.regionId;
+  const agencyName = feed?.name ?? smokeCase.expectedFeedId;
+  return `${smokeCase.id} · ${regionName} · ${agencyName}`;
+}
+
+function resolveCaseNames(smokeCase: GtfsSmokeCase): {
+  regionName: string;
+  agencyName: string;
+} {
+  const region = GTFS_CITIES.find((r) => r.id === smokeCase.regionId);
+  const feed = region?.feeds.find((f) => f.id === smokeCase.expectedFeedId);
+  return {
+    regionName: region?.name ?? smokeCase.regionId,
+    agencyName: feed?.name ?? smokeCase.expectedFeedId,
+  };
+}
 
 function loadEnvLocal() {
   const envPath = path.resolve(process.cwd(), ".env.local");
@@ -263,11 +286,12 @@ async function evaluateRouteGtfs(
 
 function formatCaseMarkdown(report: CaseReport): string {
   const lines: string[] = [];
-  lines.push(`## ${report.id} — ${report.passed ? "PASS" : "FAIL"}`);
+  lines.push(`## ${report.label} — ${report.passed ? "PASS" : "FAIL"}`);
   lines.push("");
+  lines.push(`- **Region:** ${report.regionName}`);
+  lines.push(`- **GTFS / agency:** ${report.agencyName} (\`${report.expectedFeedId}\`)`);
   lines.push(`- **Intent:** ${report.intent}`);
   lines.push(`- **OD:** ${report.origin} → ${report.destination}`);
-  lines.push(`- **Expected feed:** \`${report.expectedFeedId}\``);
   if (report.notes) lines.push(`- **Notes:** ${report.notes}`);
   lines.push("");
 
@@ -381,8 +405,9 @@ describe("GTFS smoke (manual / occasional)", () => {
   });
 
   for (const smokeCase of cases) {
+    const label = caseLabel(smokeCase);
     it(
-      `${smokeCase.id}: ${smokeCase.intent} (${smokeCase.origin} → ${smokeCase.destination})`,
+      `${label}: ${smokeCase.intent} (${smokeCase.origin} → ${smokeCase.destination})`,
       async () => {
         await runSmokeCase(smokeCase);
       },
@@ -397,9 +422,11 @@ async function runSmokeCase(smokeCase: GtfsSmokeCase) {
     process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
   expect(key, "Set GOOGLE_MAPS_API_KEY in .env.local").toBeTruthy();
 
-  console.log(
-    `\n══ ${smokeCase.id} ══ ${smokeCase.origin} → ${smokeCase.destination}`,
-  );
+  const { regionName, agencyName } = resolveCaseNames(smokeCase);
+  const label = caseLabel(smokeCase);
+
+  console.log(`\n══ ${label} ══`);
+  console.log(`  ${smokeCase.origin} → ${smokeCase.destination}`);
   if (withRestaurants) {
     console.log("  (restaurants sampling enabled)");
   }
@@ -462,6 +489,9 @@ async function runSmokeCase(smokeCase: GtfsSmokeCase) {
 
   caseReports.push({
     id: smokeCase.id,
+    label,
+    regionName,
+    agencyName,
     intent: smokeCase.intent,
     origin: smokeCase.origin,
     destination: smokeCase.destination,
@@ -474,7 +504,7 @@ async function runSmokeCase(smokeCase: GtfsSmokeCase) {
   expect(
     matchedCount,
     [
-      `${smokeCase.id} failed GTFS matching on ${results.length} route(s) tried.`,
+      `${label} failed GTFS matching on ${results.length} route(s) tried.`,
       ...results.map((r) => `  - route[${r.routeIndex}]: ${r.detail}`),
       smokeCase.notes ? `  note: ${smokeCase.notes}` : "",
     ]
