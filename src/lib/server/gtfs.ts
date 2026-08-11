@@ -22,10 +22,13 @@ type GtfsIndex = {
   stops: Map<string, StopInfo>;
   /** Spatial index for nearest-stop lookups */
   tree: RBush<RBushStopItem>;
-  /** route_short_name → route_ids (usually one, but can be several) */
+  /** route_short_name and/or route_long_name aliases → route_ids */
   routesByShortName: Map<string, string[]>;
-  /** route_id → direction_id (0 | 1) → ordered stop_ids */
-  routeStops: Map<string, Map<number, string[]>>;
+  /**
+   * route_id → direction_id → unique trip patterns (ordered stop_ids).
+   * Multiple patterns matter for branching rail (e.g. MBTA Red Line Ashmont vs Braintree).
+   */
+  routeStops: Map<string, Map<number, string[][]>>;
 };
 
 // ---- Per-feed cache -------------------------------------------------------
@@ -183,21 +186,30 @@ function parseRoutesAndTrips(
   routesByShortName: Map<string, string[]>;
   tripInfo: Map<string, { routeId: string; directionId: number }>;
 } {
-  // routes.txt → route_id ↔ short_name
+  // routes.txt → name aliases → route_id (short and/or long; MBTA subway
+  // often has empty short_name and long_name like "Red Line")
   const routesLines = routesCsv.split("\n");
   const routesHeaders = parseHeader(routesLines[0]);
   const routesByShortName = new Map<string, string[]>();
+
+  const addNameAlias = (name: string, routeId: string) => {
+    const key = name.trim();
+    if (!key) return;
+    const existing = routesByShortName.get(key) ?? [];
+    if (!existing.includes(routeId)) existing.push(routeId);
+    routesByShortName.set(key, existing);
+  };
 
   for (let i = 1; i < routesLines.length; i++) {
     const line = routesLines[i].trim();
     if (!line) continue;
     const row = parseCsvRow(line, routesHeaders);
-    const shortName =
-      row.route_short_name?.trim() || row.route_long_name?.trim() || "";
-    if (!shortName || !row.route_id) continue;
-    const existing = routesByShortName.get(shortName) ?? [];
-    existing.push(row.route_id);
-    routesByShortName.set(shortName, existing);
+    if (!row.route_id) continue;
+    const shortName = row.route_short_name?.trim() ?? "";
+    const longName = row.route_long_name?.trim() ?? "";
+    // Index both so Google "B" and "Green Line B" both resolve.
+    if (shortName) addNameAlias(shortName, row.route_id);
+    if (longName) addNameAlias(longName, row.route_id);
   }
 
   // trips.txt → trip_id → { route_id, direction_id }
@@ -225,7 +237,7 @@ function parseRoutesAndTrips(
 function parseStopTimes(
   csv: string,
   tripInfo: Map<string, { routeId: string; directionId: number }>,
-): Map<string, Map<number, string[]>> {
+): Map<string, Map<number, string[][]>> {
   const lines = csv.split("\n");
   const headers = parseHeader(lines[0]);
 
@@ -252,35 +264,35 @@ function parseStopTimes(
     arr.push({ seq, stopId });
   }
 
-  // Pass 2 — for each (route_id, direction_id), keep the canonical trip
-  // (the one that serves the most stops, i.e. the full-length trip).
-  const bestTrip = new Map<string, { tripId: string; count: number }>();
+  // Pass 2 — keep every unique stop sequence per (route_id, direction_id).
+  // Branching lines (MBTA Red Ashmont vs Braintree) need more than the single
+  // longest trip or end stations on the shorter branch never match.
+  const routeStops = new Map<string, Map<number, string[][]>>();
+  const seenSig = new Map<string, Set<string>>();
 
   for (const [tripId, stops] of allTripStops) {
     const info = tripInfo.get(tripId);
     if (!info) continue;
-    const key = `${info.routeId}:${info.directionId}`;
-    const current = bestTrip.get(key);
-    if (!current || stops.length > current.count) {
-      bestTrip.set(key, { tripId, count: stops.length });
-    }
-  }
 
-  // Build final index: route_id → Map<direction_id → stop_ids[]>
-  const routeStops = new Map<string, Map<number, string[]>>();
-
-  for (const [key, { tripId }] of bestTrip) {
-    const colonIdx = key.indexOf(":");
-    const routeId = key.slice(0, colonIdx);
-    const directionId = parseInt(key.slice(colonIdx + 1), 10);
-
-    const stops = allTripStops.get(tripId) ?? [];
     stops.sort((a, b) => a.seq - b.seq);
     const stopIds = stops.map((s) => s.stopId);
+    if (stopIds.length === 0) continue;
 
-    const dirMap = routeStops.get(routeId) ?? new Map<number, string[]>();
-    dirMap.set(directionId, stopIds);
-    routeStops.set(routeId, dirMap);
+    const sigKey = `${info.routeId}:${info.directionId}`;
+    const sig = stopIds.join("\0");
+    let sigs = seenSig.get(sigKey);
+    if (!sigs) {
+      sigs = new Set();
+      seenSig.set(sigKey, sigs);
+    }
+    if (sigs.has(sig)) continue;
+    sigs.add(sig);
+
+    const dirMap = routeStops.get(info.routeId) ?? new Map<number, string[][]>();
+    const patterns = dirMap.get(info.directionId) ?? [];
+    patterns.push(stopIds);
+    dirMap.set(info.directionId, patterns);
+    routeStops.set(info.routeId, dirMap);
   }
 
   return routeStops;
@@ -336,8 +348,9 @@ function findClosestInRoute(
 }
 
 /**
- * For each route in routeIds, try both directions and return the stops between
- * the closest dep stop and closest arr stop (in sequence order).
+ * For each route in routeIds, try every direction/pattern and return the stops
+ * between the closest dep and arr (in sequence order). Prefers the pattern that
+ * yields the most in-between stops when several match (fuller branch).
  */
 function tryRouteIds(
   index: GtfsIndex,
@@ -347,19 +360,29 @@ function tryRouteIds(
   arrLat: number,
   arrLng: number,
 ): string[] | null {
+  let best: string[] | null = null;
+
   for (const routeId of routeIds) {
     const directions = index.routeStops.get(routeId);
     if (!directions) continue;
-    for (const stopIds of directions.values()) {
-      const dep = findClosestInRoute(index, stopIds, depLat, depLng);
-      const arr = findClosestInRoute(index, stopIds, arrLat, arrLng);
-      if (dep && arr && dep.idx <= arr.idx) {
-        return stopIds.slice(dep.idx, arr.idx + 1);
+    for (const patterns of directions.values()) {
+      for (const stopIds of patterns) {
+        const dep = findClosestInRoute(index, stopIds, depLat, depLng);
+        const arr = findClosestInRoute(index, stopIds, arrLat, arrLng);
+        if (dep && arr && dep.idx <= arr.idx) {
+          const slice = stopIds.slice(dep.idx, arr.idx + 1);
+          if (!best || slice.length > best.length) best = slice;
+        }
       }
     }
   }
-  return null;
+  return best;
 }
+
+/** Matching tiers for getStopsBetween (run in order when several are requested). */
+export type GtfsMatchTier = "exact" | "fuzzy" | "scan";
+
+const ALL_MATCH_TIERS: GtfsMatchTier[] = ["exact", "fuzzy", "scan"];
 
 /**
  * Returns every transit stop (in order) between the departure and arrival
@@ -370,11 +393,16 @@ function tryRouteIds(
  *  2. Case-insensitive / substring name match (e.g. "SkyTrain Expo Line" ↔ "Expo Line").
  *  3. Full route scan — ignores route name, finds any route whose stop sequence
  *     runs from a stop near dep to a stop near arr in the right order.
+ *
+ * Pass `tiers` to run a subset (used so multi-feed metros can try exact on every
+ * feed before any feed's fuzzy/scan — e.g. Sound Transit "1 Line" before Metro "1").
  */
 export function getStopsBetween(
   index: GtfsIndex,
   step: TransitStepInput,
+  options?: { tiers?: GtfsMatchTier[] },
 ): TransitStopPoint[] {
+  const tiers = options?.tiers ?? ALL_MATCH_TIERS;
   const toPoints = (stopIds: string[], routeShortName?: string): TransitStopPoint[] =>
     stopIds
       .map((id): TransitStopPoint | null => {
@@ -390,80 +418,127 @@ export function getStopsBetween(
       })
       .filter((s): s is TransitStopPoint => s !== null);
 
-  // Tier 1 — exact short-name match
-  const exactIds = index.routesByShortName.get(step.routeShortName) ?? [];
-  if (exactIds.length > 0) {
-    const stopIds = tryRouteIds(
-      index,
-      exactIds,
-      step.departureLat,
-      step.departureLng,
-      step.arrivalLat,
-      step.arrivalLng,
+  for (const tier of tiers) {
+    if (tier === "exact") {
+      const exactIds = index.routesByShortName.get(step.routeShortName) ?? [];
+      if (exactIds.length > 0) {
+        const stopIds = tryRouteIds(
+          index,
+          exactIds,
+          step.departureLat,
+          step.departureLng,
+          step.arrivalLat,
+          step.arrivalLng,
+        );
+        if (stopIds) {
+          console.log(
+            `[GTFS] "${step.routeShortName}" matched exactly → ${stopIds.length} stops`,
+          );
+          return toPoints(stopIds, step.routeShortName);
+        }
+      }
+      continue;
+    }
+
+    if (tier === "fuzzy") {
+      if (!step.routeShortName) continue;
+      const needleLower = step.routeShortName.toLowerCase();
+      const fuzzyIds: string[] = [];
+      for (const [storedName, ids] of index.routesByShortName) {
+        const hayLower = storedName.toLowerCase();
+        if (
+          hayLower === needleLower ||
+          hayLower.includes(needleLower) ||
+          needleLower.includes(hayLower)
+        ) {
+          fuzzyIds.push(...ids);
+        }
+      }
+      if (fuzzyIds.length > 0) {
+        const stopIds = tryRouteIds(
+          index,
+          fuzzyIds,
+          step.departureLat,
+          step.departureLng,
+          step.arrivalLat,
+          step.arrivalLng,
+        );
+        if (stopIds) {
+          console.log(
+            `[GTFS] "${step.routeShortName}" matched via fuzzy name → ${stopIds.length} stops`,
+          );
+          return toPoints(stopIds, step.routeShortName);
+        }
+      }
+      continue;
+    }
+
+    // tier === "scan"
+    console.warn(
+      `[GTFS] "${step.routeShortName}" — no name match, trying full route scan ` +
+        `dep=(${step.departureLat},${step.departureLng}) arr=(${step.arrivalLat},${step.arrivalLng})`,
     );
-    if (stopIds) {
-      console.log(
-        `[GTFS] "${step.routeShortName}" matched exactly → ${stopIds.length} stops`,
-      );
-      return toPoints(stopIds, step.routeShortName);
-    }
-  }
 
-  // Tier 2 — case-insensitive / substring name match
-  if (step.routeShortName) {
-    const needleLower = step.routeShortName.toLowerCase();
-    const fuzzyIds: string[] = [];
-    for (const [storedName, ids] of index.routesByShortName) {
-      const hayLower = storedName.toLowerCase();
-      if (
-        hayLower === needleLower ||
-        hayLower.includes(needleLower) ||
-        needleLower.includes(hayLower)
-      ) {
-        fuzzyIds.push(...ids);
-      }
-    }
-    if (fuzzyIds.length > 0) {
-      const stopIds = tryRouteIds(
-        index,
-        fuzzyIds,
-        step.departureLat,
-        step.departureLng,
-        step.arrivalLat,
-        step.arrivalLng,
-      );
-      if (stopIds) {
-        console.log(
-          `[GTFS] "${step.routeShortName}" matched via fuzzy name → ${stopIds.length} stops`,
-        );
-        return toPoints(stopIds, step.routeShortName);
+    for (const [, directions] of index.routeStops) {
+      for (const patterns of directions.values()) {
+        for (const stopIds of patterns) {
+          const dep = findClosestInRoute(
+            index,
+            stopIds,
+            step.departureLat,
+            step.departureLng,
+            500,
+          );
+          const arr = findClosestInRoute(
+            index,
+            stopIds,
+            step.arrivalLat,
+            step.arrivalLng,
+            500,
+          );
+          if (dep && arr && dep.idx <= arr.idx) {
+            console.log(
+              `[GTFS] "${step.routeShortName}" matched via full route scan → ${arr.idx - dep.idx + 1} stops`,
+            );
+            return toPoints(
+              stopIds.slice(dep.idx, arr.idx + 1),
+              step.routeShortName,
+            );
+          }
+        }
       }
     }
   }
 
-  // Tier 3 — full route scan: find any route whose stop sequence runs
-  // from a stop near dep to a stop near arr in order.
-  console.warn(
-    `[GTFS] "${step.routeShortName}" — no name match, trying full route scan ` +
-      `dep=(${step.departureLat},${step.departureLng}) arr=(${step.arrivalLat},${step.arrivalLng})`,
-  );
-
-  for (const [, directions] of index.routeStops) {
-    for (const stopIds of directions.values()) {
-      const dep = findClosestInRoute(index, stopIds, step.departureLat, step.departureLng, 500);
-      const arr = findClosestInRoute(index, stopIds, step.arrivalLat, step.arrivalLng, 500);
-      if (dep && arr && dep.idx <= arr.idx) {
-        console.log(
-          `[GTFS] "${step.routeShortName}" matched via full route scan → ${arr.idx - dep.idx + 1} stops`,
-        );
-        return toPoints(stopIds.slice(dep.idx, arr.idx + 1), step.routeShortName);
-      }
-    }
+  if (tiers.length === ALL_MATCH_TIERS.length) {
+    console.error(
+      `[GTFS] "${step.routeShortName}" — all tiers failed ` +
+        `dep=(${step.departureLat},${step.departureLng}) arr=(${step.arrivalLat},${step.arrivalLng})`,
+    );
   }
-
-  console.error(
-    `[GTFS] "${step.routeShortName}" — all tiers failed ` +
-      `dep=(${step.departureLat},${step.departureLng}) arr=(${step.arrivalLat},${step.arrivalLng})`,
-  );
   return [];
+}
+
+/**
+ * Multi-feed match: try exact on every feed, then fuzzy, then scan.
+ * Prevents a weaker fuzzy hit (Metro bus "1") from beating an exact Link name.
+ */
+export async function getStopsBetweenFeeds(
+  feeds: GtfsFeedSource[],
+  step: TransitStepInput,
+): Promise<{ stops: TransitStopPoint[]; feedId?: string }> {
+  for (const tier of ALL_MATCH_TIERS) {
+    for (const feed of feeds) {
+      try {
+        const index = await getGtfsIndex(feed);
+        const found = getStopsBetween(index, step, { tiers: [tier] });
+        if (found.length > 0) {
+          return { stops: found, feedId: feed.id };
+        }
+      } catch (err) {
+        console.warn(`[GTFS] feed ${feed.id} failed (${tier}):`, err);
+      }
+    }
+  }
+  return { stops: [] };
 }

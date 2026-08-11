@@ -97,23 +97,24 @@ export const GTFS_SMOKE_CASES: GtfsSmokeCase[] = [
     destination: "Jean-Talon Market, Montreal, QC",
   },
 
-  // King County Metro
+  // Seattle / Puget Sound — Sound Transit Link + King County Metro
   {
     id: "SEA-1",
     regionId: "seattle",
-    expectedFeedId: "king-county-metro",
-    intent: "Downtown bus spine",
+    expectedFeedId: "sound-transit",
+    intent: "Link light rail spine",
     origin: "Westlake Station, Seattle, WA",
     destination: "University of Washington Station, Seattle, WA",
-    notes: "May be Link in Google — Metro-only feed may fail",
+    notes: "Google usually returns 1 Line / 2 Line (Sound Transit)",
   },
   {
     id: "SEA-2",
     regionId: "seattle",
-    expectedFeedId: "king-county-metro",
-    intent: "Cross-lake / Eastside",
+    expectedFeedId: "sound-transit",
+    intent: "Link Eastside / cross-lake",
     origin: "Bellevue Transit Center, Bellevue, WA",
     destination: "Westlake Station, Seattle, WA",
+    notes: "Typically 2 Line; Bellevue must be inside Seattle metro bounds",
   },
   {
     id: "SEA-3",
@@ -122,6 +123,7 @@ export const GTFS_SMOKE_CASES: GtfsSmokeCase[] = [
     intent: "Neighborhood bus",
     origin: "Columbia City, Seattle, WA",
     destination: "Downtown Seattle, WA",
+    notes: "Metro bus corridor; smoke tries all Seattle feeds like production",
   },
 
   // TriMet
@@ -182,8 +184,9 @@ export const GTFS_SMOKE_CASES: GtfsSmokeCase[] = [
     regionId: "boston",
     expectedFeedId: "mbta",
     intent: "Subway core",
-    origin: "South Station, Boston, MA",
-    destination: "Park Street Station, Boston, MA",
+    origin: "Harvard Station, Cambridge, MA",
+    destination: "South Station, Boston, MA",
+    notes: "Red Line trunk; longer than South Station↔Park so Google reliably returns transit",
   },
   {
     id: "MBTA-2",
@@ -192,6 +195,7 @@ export const GTFS_SMOKE_CASES: GtfsSmokeCase[] = [
     intent: "Cross-branch subway",
     origin: "Alewife Station, Cambridge, MA",
     destination: "Ashmont Station, Boston, MA",
+    notes: "Red Line Ashmont branch — needs multi-pattern trip index (not Braintree-only)",
   },
   {
     id: "MBTA-3",
@@ -218,6 +222,7 @@ export const GTFS_SMOKE_CASES: GtfsSmokeCase[] = [
     intent: "Suburb ↔ downtown rail",
     origin: "Littleton–Mineral Station, Littleton, CO",
     destination: "Union Station, Denver, CO",
+    notes: "C/D Line southwest; Littleton must be inside Denver metro bounds",
   },
   {
     id: "RTD-3",

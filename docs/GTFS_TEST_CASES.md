@@ -79,13 +79,13 @@ cross-env SMOKE_CASE=TL-1 npm run smoke:gtfs
 
 ---
 
-## King County Metro — Seattle area (`king-county-metro`)
+## Seattle / Puget Sound (`sound-transit` + `king-county-metro`)
 
 | ID | Intent | Origin | Destination | Notes |
 | --- | --- | --- | --- | --- |
-| SEA-1 | Downtown bus spine | Westlake Station, Seattle, WA | University of Washington Station, Seattle, WA | May be Link in Google Directions — if GTFS returns 0 stops, note whether Link is missing from Metro-only feed |
-| SEA-2 | Cross-lake / Eastside | Bellevue Transit Center, Bellevue, WA | Westlake Station, Seattle, WA | Classic Eastside ↔ Seattle; Metro bus / RapidRide |
-| SEA-3 | Neighborhood bus | Columbia City, Seattle, WA | Downtown Seattle, WA | South Seattle → core bus corridors |
+| SEA-1 | Link light rail spine | Westlake Station, Seattle, WA | University of Washington Station, Seattle, WA | Expect Google `1 Line` / `2 Line` → Sound Transit GTFS |
+| SEA-2 | Link Eastside / cross-lake | Bellevue Transit Center, Bellevue, WA | Westlake Station, Seattle, WA | Typically `2 Line`; Bellevue inside metro bounds |
+| SEA-3 | Neighborhood bus | Columbia City, Seattle, WA | Downtown Seattle, WA | Metro bus corridor (e.g. `7`); multi-feed matcher tries ST then Metro |
 
 ---
 
@@ -113,9 +113,9 @@ cross-env SMOKE_CASE=TL-1 npm run smoke:gtfs
 
 | ID | Intent | Origin | Destination | Notes |
 | --- | --- | --- | --- | --- |
-| MBTA-1 | Subway core | South Station, Boston, MA | Park Street Station, Boston, MA | Red/Green downtown core |
-| MBTA-2 | Cross-branch subway | Alewife Station, Cambridge, MA | Ashmont Station, Boston, MA | Red Line end-to-end-ish |
-| MBTA-3 | Green Line / bus mix | Boston College Station, Boston, MA | Government Center, Boston, MA | Green Line branch naming often tricky |
+| MBTA-1 | Subway core | Harvard Station, Cambridge, MA | South Station, Boston, MA | Red Line trunk; longer OD so Google reliably returns transit |
+| MBTA-2 | Cross-branch subway | Alewife Station, Cambridge, MA | Ashmont Station, Boston, MA | Red Line Ashmont branch (multi-pattern trip index) |
+| MBTA-3 | Green Line / bus mix | Boston College Station, Boston, MA | Government Center, Boston, MA | Green Line branch naming (B/C/D/E + long names) |
 
 ---
 
@@ -124,7 +124,7 @@ cross-env SMOKE_CASE=TL-1 npm run smoke:gtfs
 | ID | Intent | Origin | Destination | Notes |
 | --- | --- | --- | --- | --- |
 | RTD-1 | Rail core | Union Station, Denver, CO | Denver Airport (DEN), Denver, CO | A Line; airport rail naming |
-| RTD-2 | Suburb ↔ downtown rail | Littleton–Mineral Station, Littleton, CO | Union Station, Denver, CO | Southwest rail into core |
+| RTD-2 | Suburb ↔ downtown rail | Littleton–Mineral Station, Littleton, CO | Union Station, Denver, CO | C/D Line southwest; Littleton inside metro bounds |
 | RTD-3 | Bus mall / local | Civic Center Station, Denver, CO | Cherry Creek, Denver, CO | Shorter bus-oriented hop |
 
 ---

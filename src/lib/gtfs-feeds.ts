@@ -8,8 +8,9 @@
  * Verify feeds locally on this branch before merging to master; remove any
  * that fail smoke tests rather than shipping broken coverage.
  *
- * Planned set (this branch): TransLink, TTC, STM, King County Metro, TriMet,
- * CTA, MBTA, RTD, CapMetro. Not included: NYC, LA/SF multi-feed, Asia, etc.
+ * Planned set (this branch): TransLink, TTC, STM, King County Metro + Sound
+ * Transit (Link), TriMet, CTA, MBTA, RTD, CapMetro. Not included: NYC, LA/SF
+ * multi-agency dumps, Asia, etc.
  */
 
 export type GtfsBounds = {
@@ -81,10 +82,18 @@ export const GTFS_CITIES: GtfsCity[] = [
   // ── United States ───────────────────────────────────────────────────────
   {
     id: "seattle",
-    name: "Seattle / King County",
+    name: "Seattle / Puget Sound",
     country: "US",
-    bounds: { north: 47.78, south: 47.48, west: -122.44, east: -122.22 },
+    // Includes Seattle + Eastside (Bellevue/Redmond) for Link 2 Line / Metro.
+    bounds: { north: 47.82, south: 47.4, west: -122.44, east: -122.08 },
     feeds: [
+      // Sound Transit first so Link exact names ("1 Line", "2 Line") win before
+      // Metro fuzzy could treat Google "1 Line" as Metro bus "1".
+      {
+        id: "sound-transit",
+        name: "Sound Transit",
+        url: "https://www.soundtransit.org/GTFS-rail/40_gtfs.zip",
+      },
       {
         id: "king-county-metro",
         name: "King County Metro",
@@ -133,9 +142,10 @@ export const GTFS_CITIES: GtfsCity[] = [
   },
   {
     id: "denver",
-    name: "Denver",
+    name: "Denver / RTD metro",
     country: "US",
-    bounds: { north: 39.92, south: 39.61, west: -105.11, east: -104.73 },
+    // Includes DIA (east) and southwest rail suburbs (Littleton–Mineral ~39.58).
+    bounds: { north: 39.95, south: 39.5, west: -105.15, east: -104.65 },
     feeds: [
       {
         id: "rtd",
@@ -153,7 +163,9 @@ export const GTFS_CITIES: GtfsCity[] = [
       {
         id: "capmetro",
         name: "CapMetro",
-        url: "https://data.texas.gov/download/cuc7-ywmd/application%2Fzip",
+        // Static schedule zip (r4v4-vz24). Do not use cuc7-ywmd — that dataset is
+        // GTFS-Realtime JSON and fflate fails with "invalid zip data".
+        url: "https://data.texas.gov/download/r4v4-vz24/application/zip",
       },
     ],
   },

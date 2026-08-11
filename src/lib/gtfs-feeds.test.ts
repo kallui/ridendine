@@ -51,10 +51,20 @@ describe("gtfs-feeds coverage", () => {
       "ttc",
     ]);
     expect(resolveFeedsForPoint(47.606, -122.332).map((f) => f.id)).toEqual([
+      "sound-transit",
+      "king-county-metro",
+    ]);
+    // Bellevue Transit Center — Eastside inside expanded Seattle bounds
+    expect(resolveFeedsForPoint(47.6153, -122.1925).map((f) => f.id)).toEqual([
+      "sound-transit",
       "king-county-metro",
     ]);
     expect(resolveFeedsForPoint(45.515, -122.679).map((f) => f.id)).toEqual([
       "trimet",
+    ]);
+    // Littleton–Mineral Station — southwest rail suburb inside Denver bounds
+    expect(resolveFeedsForPoint(39.5804, -105.0248).map((f) => f.id)).toEqual([
+      "rtd",
     ]);
   });
 

@@ -10,7 +10,8 @@
  * Writes a reviewable report to scripts/gtfs-smoke/reports/last-report.md
  *
  * Pass: among up to 2 Google transit routes, ≥1 yields ≥2 GTFS stops
- * from the expected feed.
+ * from any feed resolved for the departure (multi-feed metros try exact
+ * across all feeds first, matching production).
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -28,8 +29,7 @@ import {
   fetchNearbyRestaurants,
 } from "@/lib/server/google-maps";
 import {
-  getGtfsIndex,
-  getStopsBetween,
+  getStopsBetweenFeeds,
   type TransitStepInput,
 } from "@/lib/server/gtfs";
 
@@ -212,12 +212,22 @@ async function evaluateRouteGtfs(
   }
 
   const feed = feeds.find((f) => f.id === expectedFeedId)!;
-  const index = await getGtfsIndex(feed);
+  // Prefer primary expected feed first, then siblings (same order as registry
+  // after moving expected to front — keeps Link exact before Metro fuzzy).
+  const orderedFeeds = [
+    feed,
+    ...feeds.filter((f) => f.id !== expectedFeedId),
+  ];
 
   const seen = new Set<string>();
   const stops: StopRow[] = [];
+  const matchedFeedIds = new Set<string>();
   for (const step of transitSteps) {
-    const found = getStopsBetween(index, step);
+    const { stops: found, feedId } = await getStopsBetweenFeeds(
+      orderedFeeds,
+      step,
+    );
+    if (feedId) matchedFeedIds.add(feedId);
     for (const s of found) {
       const key = `${s.lat.toFixed(5)},${s.lng.toFixed(5)}`;
       if (seen.has(key)) continue;
@@ -233,6 +243,10 @@ async function evaluateRouteGtfs(
 
   const gtfsStopCount = stops.length;
   const matched = gtfsStopCount >= MIN_GTFS_STOPS;
+  const viaLabel =
+    matchedFeedIds.size > 0
+      ? [...matchedFeedIds].join("+")
+      : expectedFeedId;
 
   let restaurants: RouteGtfsResult["restaurants"];
   if (withRestaurants && matched && stops.length > 0) {
@@ -279,8 +293,8 @@ async function evaluateRouteGtfs(
     matched,
     restaurants,
     detail: matched
-      ? `matched ${gtfsStopCount} GTFS stops via ${expectedFeedId}`
-      : `only ${gtfsStopCount} GTFS stops (need ≥${MIN_GTFS_STOPS}) via ${expectedFeedId}; Google lines: ${googleLineNames.join(" | ")}`,
+      ? `matched ${gtfsStopCount} GTFS stops via ${viaLabel}`
+      : `only ${gtfsStopCount} GTFS stops (need ≥${MIN_GTFS_STOPS}) via feeds [${feedIdsTried.join(", ")}]; Google lines: ${googleLineNames.join(" | ")}`,
   };
 }
 

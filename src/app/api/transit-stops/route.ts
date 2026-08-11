@@ -1,7 +1,6 @@
 import { hasGtfsCoverage, resolveFeedsForPoint } from "@/lib/gtfs-feeds";
 import {
-  getGtfsIndex,
-  getStopsBetween,
+  getStopsBetweenFeeds,
   type TransitStepInput,
   type TransitStopPoint,
 } from "@/lib/server/gtfs";
@@ -46,27 +45,18 @@ export async function POST(request: Request) {
           `dep=(${step.departureLat},${step.departureLng}) arr=(${step.arrivalLat},${step.arrivalLng})`,
       );
 
-      let stepStops: TransitStopPoint[] = [];
-
-      for (const feed of feeds) {
-        try {
-          const index = await getGtfsIndex(feed);
-          const found = getStopsBetween(index, step);
-          if (found.length > 0) {
-            stepStops = found;
-            console.log(
-              `[transit-stops] → ${found.length} stops from ${feed.id} for "${step.routeShortName}"`,
-            );
-            break;
-          }
-        } catch (err) {
-          console.warn(`[transit-stops] feed ${feed.id} failed for step:`, err);
-        }
-      }
+      const { stops: stepStops, feedId } = await getStopsBetweenFeeds(
+        feeds,
+        step,
+      );
 
       if (stepStops.length === 0) {
         console.log(
           `[transit-stops] → 0 stops returned for "${step.routeShortName}"`,
+        );
+      } else {
+        console.log(
+          `[transit-stops] → ${stepStops.length} stops from ${feedId} for "${step.routeShortName}"`,
         );
       }
 
