@@ -10,6 +10,35 @@ Use **transit** mode in RideNDine / Google Directions. For each case, confirm:
 
 Mark results in the **Result** column: `pass` / `fail` / `skip`, and note matcher issues (e.g. Google name ≠ GTFS `route_short_name`).
 
+## Automated smoke (occasional — not CI)
+
+Machine-check GTFS stop matching for these cases (no UI):
+
+```bash
+# All cases (slow — downloads feeds, calls Google Directions)
+npm run smoke:gtfs
+
+# Filtered (call the CLI directly — most reliable on Windows; npm may swallow --flags)
+node scripts/gtfs-smoke/cli.mjs --city=vancouver
+node scripts/gtfs-smoke/cli.mjs --id=TL-1
+node scripts/gtfs-smoke/cli.mjs --city=toronto --id=TTC-1
+
+# Or via env vars
+cross-env SMOKE_CITY=vancouver npm run smoke:gtfs
+cross-env SMOKE_CASE=TL-1 npm run smoke:gtfs
+```
+
+- Requires `GOOGLE_MAPS_API_KEY` in `.env.local`
+- Tries up to **2** Google transit route alternatives per case
+- **Pass** if ≥1 of those routes yields **≥2** GTFS stops from the expected feed
+- Prints all matched **GTFS stop names** to the console
+- Always overwrites:
+  - `scripts/gtfs-smoke/reports/last-run.log` — full console / vitest log
+  - `scripts/gtfs-smoke/reports/last-report.md` — stop-name review tables
+- Optional `--restaurants` samples a few nearby places (extra Places API cost)
+- Case definitions: [`src/lib/gtfs-smoke/cases.ts`](../src/lib/gtfs-smoke/cases.ts)
+- Slow on first run (downloads GTFS zips); feed indexes stay in-process for later cases in the same run
+
 **Design of the 3 cases per feed**
 
 | # | Intent |

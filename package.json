@@ -10,7 +10,8 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:quota": "vitest run src/lib/rate-limit",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "smoke:gtfs": "node scripts/gtfs-smoke/cli.mjs"
   },
   "dependencies": {
     "@googlemaps/code-assist-mcp": "^0.2.0",

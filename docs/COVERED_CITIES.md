@@ -22,6 +22,6 @@ Source of truth for **which municipalities each GTFS feed covers**.
 ## Workflow
 
 1. Keep candidate feeds in `src/lib/gtfs-feeds.ts` so you can run the app locally and smoke-test.
-2. Test trips across the **metro**, not only downtown (e.g. Vancouver ↔ Richmond). Use the origin/destination pairs in [`GTFS_TEST_CASES.md`](GTFS_TEST_CASES.md).
+2. Test trips across the **metro**, not only downtown (e.g. Vancouver ↔ Richmond). Use the origin/destination pairs in [`GTFS_TEST_CASES.md`](GTFS_TEST_CASES.md) (or `npm run smoke:gtfs`).
 3. Mark the row **Verified** here when it passes; remove feed + row if it fails and you are not fixing it yet.
 4. Before merging to master, prefer only **Verified** rows (or explicitly accept Pending ones you have personally checked).
