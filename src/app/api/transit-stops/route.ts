@@ -1,7 +1,6 @@
-import { isWithinMetroVancouver } from "@/lib/geo-bounds";
+import { hasGtfsCoverage, resolveFeedsForPoint } from "@/lib/gtfs-feeds";
 import {
-  getGtfsIndex,
-  getStopsBetween,
+  getStopsBetweenFeeds,
   type TransitStepInput,
   type TransitStopPoint,
 } from "@/lib/server/gtfs";
@@ -23,15 +22,20 @@ export async function POST(request: Request) {
     return Response.json({ stops: [] });
   }
 
-  // Only attempt GTFS lookup for Metro Vancouver routes.
   const firstStep = body.steps[0];
-  if (!isWithinMetroVancouver(firstStep.departureLat, firstStep.departureLng)) {
+  if (!hasGtfsCoverage(firstStep.departureLat, firstStep.departureLng)) {
+    return Response.json({ stops: [] });
+  }
+
+  const feeds = resolveFeedsForPoint(
+    firstStep.departureLat,
+    firstStep.departureLng,
+  );
+  if (feeds.length === 0) {
     return Response.json({ stops: [] });
   }
 
   try {
-    const index = await getGtfsIndex();
-
     const seen = new Set<string>();
     const stops: TransitStopPoint[] = [];
 
@@ -40,10 +44,22 @@ export async function POST(request: Request) {
         `[transit-stops] step routeShortName="${step.routeShortName}" ` +
           `dep=(${step.departureLat},${step.departureLng}) arr=(${step.arrivalLat},${step.arrivalLng})`,
       );
-      const stepStops = getStopsBetween(index, step);
-      console.log(
-        `[transit-stops] → ${stepStops.length} stops returned for "${step.routeShortName}"`,
+
+      const { stops: stepStops, feedId } = await getStopsBetweenFeeds(
+        feeds,
+        step,
       );
+
+      if (stepStops.length === 0) {
+        console.log(
+          `[transit-stops] → 0 stops returned for "${step.routeShortName}"`,
+        );
+      } else {
+        console.log(
+          `[transit-stops] → ${stepStops.length} stops from ${feedId} for "${step.routeShortName}"`,
+        );
+      }
+
       for (const stop of stepStops) {
         const key = `${stop.lat.toFixed(5)},${stop.lng.toFixed(5)}`;
         if (!seen.has(key)) {
@@ -55,7 +71,6 @@ export async function POST(request: Request) {
 
     return Response.json({ stops });
   } catch (err) {
-    // GTFS failure → return empty so the client falls back to polyline sampling
     console.error("[transit-stops] GTFS lookup failed:", err);
     return Response.json({ stops: [] });
   }

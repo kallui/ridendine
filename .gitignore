@@ -12,6 +12,7 @@
 
 # testing
 /coverage
+/scripts/gtfs-smoke/reports/
 
 # next.js
 /.next/

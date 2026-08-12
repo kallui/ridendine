@@ -25,7 +25,6 @@ import {
   extractTransitPolyline,
   getRouteEndpoints,
 } from "@/lib/directions-paths";
-import { isWithinMetroVancouver } from "@/lib/geo-bounds";
 import type { PlaceSearchResult } from "@/lib/places-types";
 import { computeSearchPoints } from "@/lib/route-sampling";
 import { formatStopName } from "@/lib/format-stop-name";
@@ -385,10 +384,10 @@ function MapContent() {
    * given route, then kicks off the restaurant search.
    *
    * Strategy (in order):
-   *  1. If the route is in Metro Vancouver: fetch exact stop locations from
-   *     the TransLink GTFS index via /api/transit-stops.
+   *  1. Ask /api/transit-stops for exact stop locations from the city's GTFS
+   *     feed(s) when the route has transit steps.
    *  2. If GTFS returns stops: use them directly as search centers.
-   *  3. Otherwise (outside Vancouver, or GTFS failure): fall back to sampling
+   *  3. Otherwise (no coverage, miss, or GTFS failure): fall back to sampling
    *     the TRANSIT-only step polyline every 0.5 km.
    */
   const startRestaurantSearch = async (
@@ -403,10 +402,26 @@ function MapContent() {
     const destinationName =
       route.legs[route.legs.length - 1]?.end_address?.split(",")[0] ??
       "Destination";
-    const endpoints = [
-      origin ? { ...origin, name: originName, exempt: "endpoint" as const } : null,
-      destination ? { ...destination, name: destinationName, exempt: "endpoint" as const } : null,
-    ].filter((p): p is { lat: number; lng: number; name: string; exempt: "endpoint" } => p !== null);
+    const originPoint = origin
+      ? { ...origin, name: originName, exempt: "endpoint" as const }
+      : null;
+    const destinationPoint = destination
+      ? { ...destination, name: destinationName, exempt: "endpoint" as const }
+      : null;
+
+    /** Origin → mid-route stops → destination (sidebar groups follow the trip). */
+    const inJourneyOrder = (
+      mid: {
+        lat: number;
+        lng: number;
+        name?: string;
+        exempt?: "endpoint" | "station";
+      }[],
+    ) => [
+      ...(originPoint ? [originPoint] : []),
+      ...mid,
+      ...(destinationPoint ? [destinationPoint] : []),
+    ];
 
     // Collect transit step data needed for GTFS lookup
     type TransitStepInput = {
@@ -439,9 +454,10 @@ function MapContent() {
         ];
       });
 
-    // Try GTFS lookup if the route starts in Metro Vancouver
-    const firstStep = transitSteps[0];
-    if (firstStep && isWithinMetroVancouver(firstStep.departureLat, firstStep.departureLng)) {
+    // Try GTFS lookup via the server (coverage + feed selection stay server-side)
+    if (transitSteps.length === 0) {
+      console.warn(`[ride-n-dine] Route ${routeIndex} — no transit steps found, using fallback`);
+    } else {
       try {
         const response = await fetch("/api/transit-stops", {
           method: "POST",
@@ -454,18 +470,18 @@ function MapContent() {
           };
           if (data.stops.length > 0) {
             // Mark rail/major-exchange stops as exempt from proximity dedup.
-            // TransLink GTFS names all SkyTrain stations and bus exchanges
-            // with " Station" suffix; regular bus stops never use that pattern.
+            // Many agencies include "Station" in rail/exchange names; regular
+            // bus stops usually do not.
             const taggedStops = data.stops.map((s) => ({
               ...s,
               exempt: /\bstation\b/i.test(s.name) ? ("station" as const) : undefined,
             }));
-            const allPoints = [...endpoints, ...taggedStops];
+            const allPoints = inJourneyOrder(taggedStops);
             console.group(`[ride-n-dine] Route ${routeIndex} — GTFS stop points (${allPoints.length} total)`);
             console.table(
               allPoints.map((p, i) => ({
                 "#": i,
-                source: i < endpoints.length ? "endpoint" : "GTFS",
+                source: p.exempt === "endpoint" ? "endpoint" : "GTFS",
                 name: p.name ?? "(unnamed)",
                 lat: p.lat.toFixed(5),
                 lng: p.lng.toFixed(5),
@@ -481,10 +497,6 @@ function MapContent() {
       } catch (err) {
         console.warn("[ride-n-dine] GTFS stop lookup failed, using fallback:", err);
       }
-    } else if (!firstStep) {
-      console.warn(`[ride-n-dine] Route ${routeIndex} — no transit steps found, using fallback`);
-    } else {
-      console.info(`[ride-n-dine] Route ${routeIndex} — outside Metro Vancouver, using polyline fallback`);
     }
 
     // Fallback: sample the transit-only polyline at tight intervals
@@ -494,12 +506,12 @@ function MapContent() {
         searchIntervalKm: fallbackSearchInterval,
         apiSearchRadiusM: searchRadius,
       });
-      const allPoints = [...endpoints, ...fallbackPoints];
+      const allPoints = inJourneyOrder(fallbackPoints);
       console.group(`[ride-n-dine] Route ${routeIndex} — fallback polyline sample points (${allPoints.length} total)`);
       console.table(
         allPoints.map((p, i) => ({
           "#": i,
-          source: i < endpoints.length ? "endpoint" : "polyline-sample",
+          source: p.exempt === "endpoint" ? "endpoint" : "polyline-sample",
           name: (p as { name?: string }).name ?? "(unnamed)",
           lat: p.lat.toFixed(5),
           lng: p.lng.toFixed(5),
@@ -516,7 +528,7 @@ function MapContent() {
       searchIntervalKm: fallbackSearchInterval,
       apiSearchRadiusM: searchRadius,
     });
-    const allLastResort = [...endpoints, ...lastResortPoints];
+    const allLastResort = inJourneyOrder(lastResortPoints);
     console.warn(`[ride-n-dine] Route ${routeIndex} — last-resort full polyline sample (${allLastResort.length} points)`);
     searchRestaurants(allLastResort, routeIndex, "sampled");
   };

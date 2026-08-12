@@ -7,6 +7,11 @@ export default defineConfig({
   test: {
     environment: "node",
     setupFiles: ["./vitest.setup.ts"],
+    exclude: [
+      "**/node_modules/**",
+      "**/dist/**",
+      "**/scripts/gtfs-smoke/**",
+    ],
   },
   resolve: {
     alias: {
