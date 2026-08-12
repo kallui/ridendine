@@ -2,19 +2,30 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useMapsLibrary } from "@vis.gl/react-google-maps";
 import { AUTOCOMPLETE_DEBOUNCE_MS } from "@/lib/search-config";
 
-// Metro Vancouver fallback bounds
-const VANCOUVER_BIAS: google.maps.LatLngBoundsLiteral = {
-  north: 49.4,
-  south: 49.0,
-  east: -122.5,
-  west: -123.3,
-};
-
 export type AutocompletePrediction = {
   description: string;
   place_id: string;
 };
 
+/** ~10km box around a point for Places locationBias. */
+function biasAround(
+  lat: number,
+  lng: number,
+): google.maps.LatLngBoundsLiteral {
+  const delta = 0.1;
+  return {
+    north: lat + delta,
+    south: lat - delta,
+    east: lng + delta,
+    west: lng - delta,
+  };
+}
+
+/**
+ * Places autocomplete for origin/destination.
+ * Biases toward GPS when available; otherwise omits locationBias so results
+ * are not stuck on a single metro (e.g. old Vancouver-only fallback).
+ */
 export function useCustomPlacesAutocomplete(options?: {
   initialInput?: string;
   userLocation?: google.maps.LatLngLiteral | null;
@@ -43,22 +54,12 @@ export function useCustomPlacesAutocomplete(options?: {
   const sessionTokenRef =
     useRef<google.maps.places.AutocompleteSessionToken | null>(null);
 
-  // Build location bias from passed-in userLocation, falling back to Vancouver
-  const locationBias = useMemo((): google.maps.LatLngBoundsLiteral => {
-    if (options?.userLocation) {
-      const { lat, lng } = options.userLocation;
-      const delta = 0.1;
-      return {
-        north: lat + delta,
-        south: lat - delta,
-        east: lng + delta,
-        west: lng - delta,
-      };
-    }
-    return VANCOUVER_BIAS;
+  const locationBias = useMemo((): google.maps.LatLngBoundsLiteral | undefined => {
+    if (!options?.userLocation) return undefined;
+    const { lat, lng } = options.userLocation;
+    return biasAround(lat, lng);
   }, [options?.userLocation]);
 
-  // Create a session token once the places library is ready
   useEffect(() => {
     if (!placesLib) return;
     sessionTokenRef.current = new google.maps.places.AutocompleteSessionToken();
@@ -72,11 +73,17 @@ export function useCustomPlacesAutocomplete(options?: {
       if (!cancelled) setLoading(true);
     });
 
-    google.maps.places.AutocompleteSuggestion.fetchAutocompleteSuggestions({
+    const request: google.maps.places.AutocompleteRequest = {
       input: debouncedInput,
       sessionToken: sessionTokenRef.current ?? undefined,
-      locationBias: locationBias,
-    })
+    };
+    if (locationBias) {
+      request.locationBias = locationBias;
+    }
+
+    google.maps.places.AutocompleteSuggestion.fetchAutocompleteSuggestions(
+      request,
+    )
       .then(({ suggestions }) => {
         if (cancelled) return;
         setPredictions(
@@ -101,7 +108,6 @@ export function useCustomPlacesAutocomplete(options?: {
     };
   }, [debouncedInput, placesLib, shouldFetchPredictions, locationBias]);
 
-  // Rotate session token after each selection (correct billing grouping)
   const setSelectedPrediction = useCallback(
     (prediction: AutocompletePrediction | null) => {
       setSelectedPredictionState(prediction);

@@ -49,6 +49,15 @@ describe("gtfs-feeds coverage", () => {
   it("resolves planned metros for local testing", () => {
     expect(resolveFeedsForPoint(43.653, -79.383).map((f) => f.id)).toEqual([
       "ttc",
+      "go-transit",
+    ]);
+    expect(resolveFeedsForPoint(45.504, -73.567).map((f) => f.id)).toEqual([
+      "stm",
+      "rem",
+    ]);
+    expect(resolveFeedsForPoint(41.878, -87.629).map((f) => f.id)).toEqual([
+      "cta",
+      "pace",
     ]);
     expect(resolveFeedsForPoint(47.606, -122.332).map((f) => f.id)).toEqual([
       "sound-transit",

@@ -70,8 +70,17 @@ export const GTFS_SMOKE_CASES: GtfsSmokeCase[] = [
     origin: "Spadina Station, Toronto, ON",
     destination: "Distillery District, Toronto, ON",
   },
+  {
+    id: "GO-1",
+    regionId: "toronto",
+    expectedFeedId: "go-transit",
+    intent: "GO Lakeshore core",
+    origin: "Union Station, Toronto, ON",
+    destination: "Oakville GO, Oakville, ON",
+    notes: "Regional rail; Google often labels GO lines",
+  },
 
-  // STM
+  // STM + REM
   {
     id: "STM-1",
     regionId: "montreal",
@@ -95,6 +104,15 @@ export const GTFS_SMOKE_CASES: GtfsSmokeCase[] = [
     intent: "Bus + métro edge",
     origin: "Côte-Vertu Station, Montreal, QC",
     destination: "Jean-Talon Market, Montreal, QC",
+  },
+  {
+    id: "REM-1",
+    regionId: "montreal",
+    expectedFeedId: "rem",
+    intent: "REM light metro",
+    origin: "Gare Centrale, Montreal, QC",
+    destination: "Brossard Station, Brossard, QC",
+    notes: "REM South Shore; not STM",
   },
 
   // Seattle / Puget Sound — Sound Transit Link + King County Metro
@@ -176,6 +194,15 @@ export const GTFS_SMOKE_CASES: GtfsSmokeCase[] = [
     intent: "South Side / bus+L",
     origin: "Midway International Airport, Chicago, IL",
     destination: "Millennium Park, Chicago, IL",
+  },
+  {
+    id: "PACE-1",
+    regionId: "chicago",
+    expectedFeedId: "pace",
+    intent: "Pace suburban bus",
+    origin: "Evanston, IL",
+    destination: "Howard Station, Chicago, IL",
+    notes: "Suburb ↔ CTA edge; Pace feed (Metra still pending free API key)",
   },
 
   // MBTA

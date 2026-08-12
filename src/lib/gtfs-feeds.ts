@@ -8,9 +8,9 @@
  * Verify feeds locally on this branch before merging to master; remove any
  * that fail smoke tests rather than shipping broken coverage.
  *
- * Planned set (this branch): TransLink, TTC, STM, King County Metro + Sound
- * Transit (Link), TriMet, CTA, MBTA, RTD, CapMetro. Not included: NYC, LA/SF
- * multi-agency dumps, Asia, etc.
+ * Planned set (this branch): TransLink; TTC + GO; STM + REM; Sound Transit +
+ * King County Metro; TriMet; CTA + Pace (Metra after free API key); MBTA; RTD;
+ * CapMetro.
  */
 
 export type GtfsBounds = {
@@ -54,27 +54,39 @@ export const GTFS_CITIES: GtfsCity[] = [
   },
   {
     id: "toronto",
-    name: "Toronto",
+    name: "Toronto / GTA",
     country: "CA",
-    bounds: { north: 43.95, south: 43.58, west: -79.64, east: -79.12 },
+    // City + near-core GO (Mississauga / Oakville / Pearson fringe).
+    bounds: { north: 43.95, south: 43.45, west: -79.9, east: -79.05 },
     feeds: [
       {
         id: "ttc",
         name: "Toronto Transit Commission",
         url: "https://ckan0.cf.opendata.inter.prod-toronto.ca/dataset/7795b45e-e65a-4465-81fc-c36b9dfff169/resource/cfb6b2b8-6191-41e3-bda1-b175c51148cb/download/TTC%20Routes%20and%20Schedules%20Data.zip",
       },
+      {
+        id: "go-transit",
+        name: "GO Transit",
+        url: "https://assets.metrolinx.com/raw/upload/v1683228856/Documents/Metrolinx/Open Data/GO-GTFS.zip",
+      },
     ],
   },
   {
     id: "montreal",
-    name: "Montreal",
+    name: "Montreal metro",
     country: "CA",
-    bounds: { north: 45.7, south: 45.41, west: -73.95, east: -73.47 },
+    // Island + REM branches (e.g. Brossard / Deux-Montagnes fringe).
+    bounds: { north: 45.68, south: 45.35, west: -74.05, east: -73.4 },
     feeds: [
       {
         id: "stm",
         name: "Société de transport de Montréal",
         url: "https://www.stm.info/sites/default/files/gtfs/gtfs_stm.zip",
+      },
+      {
+        id: "rem",
+        name: "Réseau express métropolitain",
+        url: "https://gtfs.gpmmom.ca/gtfs/gtfs.zip",
       },
     ],
   },
@@ -116,14 +128,20 @@ export const GTFS_CITIES: GtfsCity[] = [
   },
   {
     id: "chicago",
-    name: "Chicago",
+    name: "Chicago metro",
     country: "US",
-    bounds: { north: 42.07, south: 41.64, west: -87.94, east: -87.52 },
+    // CTA core + Pace suburbs. Metra (commuter rail) after free API key signup.
+    bounds: { north: 42.35, south: 41.45, west: -88.25, east: -87.4 },
     feeds: [
       {
         id: "cta",
         name: "Chicago Transit Authority",
         url: "http://www.transitchicago.com/downloads/sch_data/google_transit.zip",
+      },
+      {
+        id: "pace",
+        name: "Pace Suburban Bus",
+        url: "https://www.pacebus.com/gtfsdownload",
       },
     ],
   },

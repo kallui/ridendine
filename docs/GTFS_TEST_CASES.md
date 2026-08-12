@@ -59,23 +59,25 @@ cross-env SMOKE_CASE=TL-1 npm run smoke:gtfs
 
 ---
 
-## TTC — Toronto (`ttc`)
+## TTC + GO — Toronto / GTA (`ttc` + `go-transit`)
 
 | ID | Intent | Origin | Destination | Notes |
 | --- | --- | --- | --- | --- |
 | TTC-1 | Subway core | Union Station, Toronto, ON | Bloor-Yonge Station, Toronto, ON | Line 1; dense downtown |
 | TTC-2 | Cross-city subway | Kipling Station, Toronto, ON | Kennedy Station, Toronto, ON | Line 2 end-to-end-ish; long stop sequence |
 | TTC-3 | Streetcar / bus mix | Spadina Station, Toronto, ON | Distillery District, Toronto, ON | Often streetcar-heavy; short-name quirks |
+| GO-1 | GO Lakeshore core | Union Station, Toronto, ON | Oakville GO, Oakville, ON | Regional rail via `go-transit` |
 
 ---
 
-## STM — Montreal (`stm`)
+## STM + REM — Montreal (`stm` + `rem`)
 
 | ID | Intent | Origin | Destination | Notes |
 | --- | --- | --- | --- | --- |
 | STM-1 | Métro core | Berri-UQAM Station, Montreal, QC | McGill Station, Montreal, QC | Short Green/Orange area hop |
 | STM-2 | Cross-island métro | Honoré-Beaugrand Station, Montreal, QC | Angrignon Station, Montreal, QC | Green Line across the island |
 | STM-3 | Bus + métro edge | Côte-Vertu Station, Montreal, QC | Jean-Talon Market, Montreal, QC | Orange Line north + local last mile |
+| REM-1 | REM light metro | Gare Centrale, Montreal, QC | Brossard Station, Brossard, QC | REM South Shore (not STM) |
 
 ---
 
@@ -99,13 +101,14 @@ cross-env SMOKE_CASE=TL-1 npm run smoke:gtfs
 
 ---
 
-## CTA — Chicago (`cta`)
+## CTA + Pace — Chicago metro (`cta` + `pace`)
 
 | ID | Intent | Origin | Destination | Notes |
 | --- | --- | --- | --- | --- |
 | CTA-1 | L train core | Chicago Union Station, Chicago, IL | The Loop (State/Lake), Chicago, IL | Short downtown L / bus; station naming |
 | CTA-2 | Long L corridor | O'Hare Airport, Chicago, IL | The Loop, Chicago, IL | Blue Line; long stop list |
 | CTA-3 | South Side / bus+L | Midway Airport, Chicago, IL | Millennium Park, Chicago, IL | Orange Line style corridor |
+| PACE-1 | Pace suburban bus | Evanston, IL | Howard Station, Chicago, IL | Suburb ↔ CTA edge; Metra still needs free API key |
 
 ---
 
