@@ -1,6 +1,8 @@
-# TODO
+# TODO (AI DONT TOUCH THIS FILE PLS)
 
 ## Now
+
+- AWS migration (`docs/MIGRATION_TO_AWS.md`)
 
 ## later
 
@@ -16,8 +18,6 @@
 
 ## after AWS migration
 
-- [ ] Metra (Chicago) after developer signup
-- [ ] Pierce / Community Transit (Seattle area)
-- [ ] STL / RTL (Montreal suburbs)
-- [ ] Mark COVERED_CITIES Verified + merge GTFS PR
-- [ ] AWS migration (`docs/MIGRATION_TO_AWS.md`)
+- Metra (Chicago) after developer signup
+- Pierce / Community Transit (Seattle area)
+- STL / RTL (Montreal suburbs)
