@@ -1,11 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { QUOTA_LIMIT, QUOTA_WINDOW_MS } from "./config";
-import { checkQuota, consumeQuota, quotaExceededResponse, resetMemoryQuota } from "./server";
+import {
+  checkQuota,
+  consumeQuota,
+  quotaExceededResponse,
+  resetMemoryQuota,
+} from "./server";
 
 describe("consumeQuota (memory fallback)", () => {
   beforeEach(() => {
-    delete process.env.UPSTASH_REDIS_REST_URL;
-    delete process.env.UPSTASH_REDIS_REST_TOKEN;
+    delete process.env.REDIS_URL;
     resetMemoryQuota();
   });
 
@@ -85,8 +89,7 @@ describe("consumeQuota (memory fallback)", () => {
 
 describe("checkQuota (memory fallback)", () => {
   beforeEach(() => {
-    delete process.env.UPSTASH_REDIS_REST_URL;
-    delete process.env.UPSTASH_REDIS_REST_TOKEN;
+    delete process.env.REDIS_URL;
     resetMemoryQuota();
   });
 

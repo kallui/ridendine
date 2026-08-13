@@ -1,4 +1,4 @@
-import { Redis } from "@upstash/redis";
+import { Redis } from "ioredis";
 import { QUOTA_LIMIT, QUOTA_WINDOW_MS } from "./config";
 import type { QuotaResult } from "./types";
 
@@ -52,14 +52,13 @@ let _redis: Redis | null = null;
 const REDIS_PREFIX = "ridendine:quota:";
 
 function getRedis(): Redis {
-  if (!_redis) _redis = Redis.fromEnv();
+  if (!_redis) _redis = new Redis(process.env.REDIS_URL!);
   return _redis;
 }
 
+// check if redis is on
 function redisConfigured(): boolean {
-  return Boolean(
-    process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN,
-  );
+  return Boolean(process.env.REDIS_URL);
 }
 
 /**
@@ -74,9 +73,11 @@ async function redisCheck(key: string): Promise<QuotaResult> {
 
   await redis.zremrangebyscore(rkey, 0, now - QUOTA_WINDOW_MS);
   const count = await redis.zcard(rkey);
-  const [oldest] = await redis.zrange(rkey, 0, 0);
+  const [oldest] = await redis.zrange(rkey, "0", "0");
 
-  const oldestMs = oldest ? parseInt((oldest as string).split(":")[0]!, 10) : null;
+  const oldestMs = oldest
+    ? parseInt((oldest as string).split(":")[0]!, 10)
+    : null;
   return {
     limit: QUOTA_LIMIT,
     remaining: Math.max(0, QUOTA_LIMIT - count),
@@ -93,8 +94,8 @@ async function redisConsume(key: string): Promise<ConsumeResult> {
   const count = await redis.zcard(rkey);
 
   if (count >= QUOTA_LIMIT) {
-    const [oldest] = await redis.zrange(rkey, 0, 0);
-    const oldestMs = oldest ? parseInt((oldest as string).split(":")[0]!, 10) : null;
+    const [oldest] = await redis.zrange(rkey, "0", "0");
+    const oldestMs = oldest ? parseInt(oldest.split(":")[0]!, 10) : null;
     return {
       allowed: false,
       limit: QUOTA_LIMIT,
@@ -104,11 +105,11 @@ async function redisConsume(key: string): Promise<ConsumeResult> {
   }
 
   const member = `${now}:${Math.random().toString(36).slice(2, 8)}`;
-  await redis.zadd(rkey, { score: now, member });
+  await redis.zadd(rkey, now, member);
   await redis.pexpire(rkey, QUOTA_WINDOW_MS);
 
-  const [oldest] = await redis.zrange(rkey, 0, 0);
-  const oldestMs = oldest ? parseInt((oldest as string).split(":")[0]!, 10) : now;
+  const [oldest] = await redis.zrange(rkey, "0", "0");
+  const oldestMs = oldest ? parseInt(oldest.split(":")[0]!, 10) : now;
 
   return {
     allowed: true,
@@ -132,7 +133,12 @@ export async function checkQuota(identifier: string): Promise<QuotaResult> {
 /** Consume one slot. Returns allowed=false (and does NOT consume) if at limit. */
 export async function consumeQuota(identifier: string): Promise<ConsumeResult> {
   if (process.env.DISABLE_RATE_LIMIT === "true") {
-    return { allowed: true, limit: QUOTA_LIMIT, remaining: QUOTA_LIMIT, nextIncreaseAt: null };
+    return {
+      allowed: true,
+      limit: QUOTA_LIMIT,
+      remaining: QUOTA_LIMIT,
+      nextIncreaseAt: null,
+    };
   }
   if (redisConfigured()) return redisConsume(identifier);
   return memConsume(identifier);
