@@ -35,6 +35,18 @@ yarn-error.log*
 .env*
 !.env.local.example
 
+# terraform
+**/.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
+!*.tfvars.example
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
 # vercel
 .vercel
 
