@@ -1,6 +1,5 @@
 import { readFile } from "fs/promises";
 import path from "path";
-import RBush from "rbush";
 import { unzipSync } from "fflate";
 import { formatStopName } from "@/lib/format-stop-name";
 import type { GtfsFeedSource } from "@/lib/gtfs-feeds";
@@ -8,14 +7,6 @@ import type { GtfsFeedSource } from "@/lib/gtfs-feeds";
 // ---- Types ----------------------------------------------------------------
 
 type StopInfo = { lat: number; lng: number; name: string };
-
-interface RBushStopItem {
-  minX: number;
-  minY: number;
-  maxX: number;
-  maxY: number;
-  stopId: string;
-}
 
 export type TransitStopPoint = {
   lat: number;
@@ -27,8 +18,6 @@ export type TransitStopPoint = {
 type GtfsIndex = {
   /** stop_id → location + name */
   stops: Map<string, StopInfo>;
-  /** Spatial index for nearest-stop lookups */
-  tree: RBush<RBushStopItem>;
   /** route_short_name and/or route_long_name aliases → route_ids */
   routesByShortName: Map<string, string[]>;
   /**
@@ -162,20 +151,12 @@ async function loadGtfs(feed: GtfsFeedSource): Promise<GtfsIndex> {
   );
   const routeStops = parseStopTimes(decode("stop_times.txt"), tripInfo);
 
-  // Build spatial index (bulk-load is much faster than individual inserts)
-  const tree = new RBush<RBushStopItem>();
-  const items: RBushStopItem[] = [];
-  for (const [stopId, { lat, lng }] of stops) {
-    items.push({ minX: lng, minY: lat, maxX: lng, maxY: lat, stopId });
-  }
-  tree.load(items);
-
   const ms = Date.now() - t;
   console.log(
     `[GTFS] Ready (${feed.id}) — ${stops.size} stops, ${routesByShortName.size} routes (${ms} ms)`,
   );
 
-  return { stops, tree, routesByShortName, routeStops };
+  return { stops, routesByShortName, routeStops };
 }
 
 // ---- CSV helpers ----------------------------------------------------------
@@ -367,11 +348,11 @@ export type TransitStepInput = {
 /**
  * Within a single route's stop sequence, find the stop closest to (lat, lng).
  *
- * Using the route's own stop list (not the global R-tree) avoids "orphan stop"
- * IDs — stops that exist in stops.txt with coordinates but are not scheduled in
- * any trip's stop_times (e.g. TransLink IDs like JYSES, GVSDS, 99xxx).  By
- * searching only the stops that actually belong to this route we always find the
- * correct platform stop, regardless of what other stops are geographically near.
+ * Using the route's own stop list avoids "orphan stop" IDs — stops that exist
+ * in stops.txt with coordinates but are not scheduled in any trip's stop_times
+ * (e.g. TransLink IDs like JYSES, GVSDS, 99xxx). By searching only the stops
+ * that actually belong to this route we always find the correct platform stop,
+ * regardless of what other stops are geographically near.
  *
  * Returns null when the closest stop exceeds maxDistM (default 1 km).
  */
