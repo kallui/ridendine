@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:quota": "vitest run src/lib/rate-limit",
     "test:watch": "vitest",
-    "smoke:gtfs": "node scripts/gtfs-smoke/cli.mjs"
+    "smoke:gtfs": "node scripts/gtfs-smoke/cli.mjs",
+    "bench:gtfs-load": "npx tsx scripts/gtfs-load-bench.ts"
   },
   "dependencies": {
     "@googlemaps/code-assist-mcp": "^0.2.0",
