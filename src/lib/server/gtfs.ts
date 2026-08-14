@@ -1,3 +1,5 @@
+import { readFile } from "fs/promises";
+import path from "path";
 import RBush from "rbush";
 import { unzipSync } from "fflate";
 import { formatStopName } from "@/lib/format-stop-name";
@@ -15,7 +17,12 @@ interface RBushStopItem {
   stopId: string;
 }
 
-export type TransitStopPoint = { lat: number; lng: number; name: string; routeShortName?: string };
+export type TransitStopPoint = {
+  lat: number;
+  lng: number;
+  name: string;
+  routeShortName?: string;
+};
 
 type GtfsIndex = {
   /** stop_id → location + name */
@@ -31,30 +38,74 @@ type GtfsIndex = {
   routeStops: Map<string, Map<number, string[][]>>;
 };
 
-// ---- Per-feed cache -------------------------------------------------------
+// ---GTFS LRU  --------------------------------------------------------
+const MAX_HOT_FEEDS = Number(process.env.MAX_HOT_FEEDS ?? 3); // max # of feeds inside in memory (RAM)
 
-const cachedIndexes = new Map<string, GtfsIndex>();
-const loadPromises = new Map<string, Promise<GtfsIndex>>();
+// LRU = Least Recently Used, we keep the most recently used feeds in memory
+// cachedIndexes is a ordered map, with oldest feed at the beginning and newest at the end
+function remember(id: string, idx: GtfsIndex) {
+  // If feed is already in memory, and used, then move it to the end of map (most recently used)
+  cachedIndexes.delete(id);
+  cachedIndexes.set(id, idx);
+
+  // If # of feeds in memory is greater than MAX_HOT_FEEDS, then remove oldest feed (first item in map)
+  while (cachedIndexes.size > MAX_HOT_FEEDS) {
+    const oldest = cachedIndexes.keys().next().value;
+    if (oldest === undefined) break;
+    cachedIndexes.delete(oldest);
+    console.log(`[GTFS] LRU evict ${oldest} (hot=${cachedIndexes.size})`);
+  }
+}
+
+// ---- Parse mutex --------------------------------------------------------
+// Mutex = mutual exclusion: only one parse runs at a time (saves RAM).
+// Callers line up. parseLock = "bathroom is free". Starts already free.
+let parseLock = Promise.resolve();
+
+function withParseLock<T>(fn: () => Promise<T>): Promise<T> {
+  // Wait for whoever is currently parsing, then run fn.
+  // 2nd fn = if the previous job failed, still run ours (don't skip the line).
+  const run = parseLock.then(fn, fn);
+
+  // Advance the lock to "this job finished". Always resolves, value discarded:
+  // - success handler: don't keep the huge GTFS result on the lock (memory)
+  // - fail handler: don't leave a rejected lock (that would block everyone forever)
+  parseLock = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run; // caller gets the real result/error; the lock only means "vacant"
+}
+
+// ---- Per-feed cache -------------------------------------------------------
+const cachedIndexes = new Map<string, GtfsIndex>(); // feeds already parsed (in RAM, LRU-capped)
+const loadPromises = new Map<string, Promise<GtfsIndex>>(); // currently loading — 2 TTC requests share 1 parse
 
 export async function getGtfsIndex(feed: GtfsFeedSource): Promise<GtfsIndex> {
+  // 1. Already in RAM? Bump LRU (mark as most recently used) and return it.
   const cached = cachedIndexes.get(feed.id);
-  if (cached) return cached;
+  if (cached) {
+    remember(feed.id, cached);
+    return cached;
+  }
 
+  // 2. Already loading this feed? Join that in-flight promise (don't start a 2nd parse).
   const inFlight = loadPromises.get(feed.id);
   if (inFlight) return inFlight;
 
-  const promise = loadGtfs(feed)
+  // 3. First request for this feed: wait our turn on the parse mutex, then load.
+  const promise = withParseLock(() => loadGtfs(feed))
     .then((idx) => {
-      cachedIndexes.set(feed.id, idx);
-      loadPromises.delete(feed.id);
+      remember(feed.id, idx); // put in LRU cache
+      loadPromises.delete(feed.id); // no longer in-flight
       return idx;
     })
     .catch((err) => {
-      loadPromises.delete(feed.id);
+      loadPromises.delete(feed.id); // failed — drop so a later retry can try again
       throw err;
     });
 
-  loadPromises.set(feed.id, promise);
+  loadPromises.set(feed.id, promise); // others arriving now will hit step 2
   return promise;
 }
 
@@ -74,16 +125,26 @@ function findZipEntry(
   return undefined;
 }
 
-async function loadGtfs(feed: GtfsFeedSource): Promise<GtfsIndex> {
-  const t = Date.now();
-  console.log(`[GTFS] Fetching ${feed.name} (${feed.id})…`);
+async function readGtfsZip(feed: GtfsFeedSource): Promise<Uint8Array> {
+  const dir = process.env.GTFS_DIR;
+  // Try to read from GTFS dir first, if doesnt exist then fetch from URL (HTTP)
+  if (dir) {
+    const file = path.join(path.resolve(dir), feed.id, "current.zip");
+    console.log(`[GTFS] Reading ${feed.id} from ${file}`);
+    return new Uint8Array(await readFile(file));
+  }
 
+  console.log(`[GTFS] Fetching ${feed.name} (${feed.id})…`);
   const res = await fetch(feed.url, { next: { revalidate: 0 } });
   if (!res.ok) {
     throw new Error(`GTFS fetch failed for ${feed.id}: HTTP ${res.status}`);
   }
+  return new Uint8Array(await res.arrayBuffer());
+}
 
-  const zipBuffer = new Uint8Array(await res.arrayBuffer());
+async function loadGtfs(feed: GtfsFeedSource): Promise<GtfsIndex> {
+  const t = Date.now();
+  const zipBuffer = await readGtfsZip(feed);
   const files = unzipSync(zipBuffer);
 
   const decode = (name: string): string => {
@@ -131,10 +192,7 @@ function parseHeader(line: string): string[] {
  * Parse a single CSV data line into an object keyed by header names.
  * Handles quoted fields that contain commas.
  */
-function parseCsvRow(
-  line: string,
-  headers: string[],
-): Record<string, string> {
+function parseCsvRow(line: string, headers: string[]): Record<string, string> {
   const values: string[] = [];
   let current = "";
   let inQuotes = false;
@@ -215,10 +273,7 @@ function parseRoutesAndTrips(
   // trips.txt → trip_id → { route_id, direction_id }
   const tripsLines = tripsCsv.split("\n");
   const tripsHeaders = parseHeader(tripsLines[0]);
-  const tripInfo = new Map<
-    string,
-    { routeId: string; directionId: number }
-  >();
+  const tripInfo = new Map<string, { routeId: string; directionId: number }>();
 
   for (let i = 1; i < tripsLines.length; i++) {
     const line = tripsLines[i].trim();
@@ -288,7 +343,8 @@ function parseStopTimes(
     if (sigs.has(sig)) continue;
     sigs.add(sig);
 
-    const dirMap = routeStops.get(info.routeId) ?? new Map<number, string[][]>();
+    const dirMap =
+      routeStops.get(info.routeId) ?? new Map<number, string[][]>();
     const patterns = dirMap.get(info.directionId) ?? [];
     patterns.push(stopIds);
     dirMap.set(info.directionId, patterns);
@@ -403,7 +459,10 @@ export function getStopsBetween(
   options?: { tiers?: GtfsMatchTier[] },
 ): TransitStopPoint[] {
   const tiers = options?.tiers ?? ALL_MATCH_TIERS;
-  const toPoints = (stopIds: string[], routeShortName?: string): TransitStopPoint[] =>
+  const toPoints = (
+    stopIds: string[],
+    routeShortName?: string,
+  ): TransitStopPoint[] =>
     stopIds
       .map((id): TransitStopPoint | null => {
         const s = index.stops.get(id);

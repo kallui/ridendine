@@ -10,9 +10,8 @@
 !.yarn/releases
 !.yarn/versions
 
-# testing
-/coverage
-/scripts/gtfs-smoke/reports/
+# GTFS zips from scripts/sync-gtfs.ts
+/data/gtfs/
 
 # next.js
 /.next/
