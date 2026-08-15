@@ -3,6 +3,8 @@
  *
  *   npx tsx scripts/sync-gtfs.ts
  *   npx tsx scripts/sync-gtfs.ts --index-only   (rebuild JSON from existing zips)
+ *
+ * Weekly cook runs on GitHub Actions (sync-gtfs.yml), then rsyncs to Lightsail.
  */
 import { existsSync } from "fs";
 import { mkdir, readFile, rename, writeFile } from "fs/promises";
