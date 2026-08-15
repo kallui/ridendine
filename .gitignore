@@ -10,9 +10,8 @@
 !.yarn/releases
 !.yarn/versions
 
-# testing
-/coverage
-/scripts/gtfs-smoke/reports/
+# GTFS zips + cooked indexes from scripts/sync-gtfs.ts
+/data/gtfs/
 
 # next.js
 /.next/
@@ -34,6 +33,18 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 !.env.local.example
+
+# terraform
+**/.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
+!*.tfvars.example
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
 
 # vercel
 .vercel

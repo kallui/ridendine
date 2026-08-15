@@ -11,7 +11,10 @@
     "test": "vitest run",
     "test:quota": "vitest run src/lib/rate-limit",
     "test:watch": "vitest",
-    "smoke:gtfs": "node scripts/gtfs-smoke/cli.mjs"
+    "smoke:gtfs": "node scripts/gtfs-smoke/cli.mjs",
+    "bench:gtfs-load": "npx tsx scripts/gtfs-load-bench.ts",
+    "sync:gtfs": "npx tsx scripts/sync-gtfs.ts",
+    "sync:gtfs-index": "npx tsx scripts/sync-gtfs.ts --index-only"
   },
   "dependencies": {
     "@googlemaps/code-assist-mcp": "^0.2.0",
@@ -23,17 +26,15 @@
     "@turf/turf": "^7.2.0",
     "@types/mdx": "^2.0.14",
     "@types/next-pwa": "^5.6.9",
-    "@upstash/ratelimit": "^2.0.8",
-    "@upstash/redis": "^1.38.0",
     "@vercel/analytics": "^2.0.1",
     "@vis.gl/react-google-maps": "^1.7.1",
     "fflate": "^0.8.3",
     "framer-motion": "^12.35.2",
+    "ioredis": "^6.0.0",
     "maplibre-gl": "^5.10.0",
     "next": "^16.1.6",
     "next-pwa": "^5.6.0",
     "pg": "^8.16.3",
-    "rbush": "^4.0.1",
     "react": "19.2.0",
     "react-dom": "19.2.0"
   },
@@ -53,6 +54,7 @@
     "eslint-config-next": "16.0.1",
     "jsdom": "^29.1.1",
     "tailwindcss": "^4",
+    "tsx": "^4.23.12",
     "typescript": "^5",
     "vitest": "^4.1.8"
   }

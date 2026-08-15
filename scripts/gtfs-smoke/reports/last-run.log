@@ -1,0 +1,80 @@
+GTFS smoke run — 2026-08-12T07:01:12.411Z
+cwd: C:\Documents\Code\ride-n-dine
+filters: city=* id=PACE-1 restaurants=false
+npm warn Unknown env config "devdir". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+ RUN  v4.1.8 C:/Documents/Code/ride-n-dine
+
+stdout | scripts/gtfs-smoke/smoke-gtfs.test.ts > GTFS smoke (manual / occasional) > PACE-1 · Chicago metro · Pace Suburban Bus: Pace suburban bus (Evanston, IL → Howard Station, Chicago, IL)
+
+══ PACE-1 · Chicago metro · Pace Suburban Bus ══
+  Evanston, IL → Howard Station, Chicago, IL
+
+stdout | scripts/gtfs-smoke/smoke-gtfs.test.ts > GTFS smoke (manual / occasional) > PACE-1 · Chicago metro · Pace Suburban Bus: Pace suburban bus (Evanston, IL → Howard Station, Chicago, IL)
+[GTFS] Fetching Pace Suburban Bus (pace)…
+
+stdout | scripts/gtfs-smoke/smoke-gtfs.test.ts > GTFS smoke (manual / occasional) > PACE-1 · Chicago metro · Pace Suburban Bus: Pace suburban bus (Evanston, IL → Howard Station, Chicago, IL)
+[GTFS] Parsing CSV files…
+[GTFS] Ready (pace) — 13775 stops, 263 routes (3580 ms)
+
+stdout | scripts/gtfs-smoke/smoke-gtfs.test.ts > GTFS smoke (manual / occasional) > PACE-1 · Chicago metro · Pace Suburban Bus: Pace suburban bus (Evanston, IL → Howard Station, Chicago, IL)
+[GTFS] Fetching Chicago Transit Authority (cta)…
+
+stdout | scripts/gtfs-smoke/smoke-gtfs.test.ts > GTFS smoke (manual / occasional) > PACE-1 · Chicago metro · Pace Suburban Bus: Pace suburban bus (Evanston, IL → Howard Station, Chicago, IL)
+[GTFS] Parsing CSV files…
+[GTFS] Ready (cta) — 11150 stops, 258 routes (13891 ms)
+
+stdout | scripts/gtfs-smoke/smoke-gtfs.test.ts > GTFS smoke (manual / occasional) > PACE-1 · Chicago metro · Pace Suburban Bus: Pace suburban bus (Evanston, IL → Howard Station, Chicago, IL)
+[GTFS] "Purple Line" matched exactly → 5 stops
+
+stdout | scripts/gtfs-smoke/smoke-gtfs.test.ts > GTFS smoke (manual / occasional) > PACE-1 · Chicago metro · Pace Suburban Bus: Pace suburban bus (Evanston, IL → Howard Station, Chicago, IL)
+  route[0] steps=1 gtfsStops=5 matched=true
+    Google lines: Purple Line
+    matched 5 GTFS stops via cta
+    GTFS stops:
+       1. Davis  [Purple Line]
+       2. Dempster  [Purple Line]
+       3. Main  [Purple Line]
+       4. South Boulevard  [Purple Line]
+       5. Howard  [Purple Line]
+
+stdout | scripts/gtfs-smoke/smoke-gtfs.test.ts > GTFS smoke (manual / occasional) > PACE-1 · Chicago metro · Pace Suburban Bus: Pace suburban bus (Evanston, IL → Howard Station, Chicago, IL)
+[GTFS] "Pulse Dempster Line" matched exactly → 5 stops
+
+stdout | scripts/gtfs-smoke/smoke-gtfs.test.ts > GTFS smoke (manual / occasional) > PACE-1 · Chicago metro · Pace Suburban Bus: Pace suburban bus (Evanston, IL → Howard Station, Chicago, IL)
+[GTFS] "Yellow Line" matched exactly → 3 stops
+
+stdout | scripts/gtfs-smoke/smoke-gtfs.test.ts > GTFS smoke (manual / occasional) > PACE-1 · Chicago metro · Pace Suburban Bus: Pace suburban bus (Evanston, IL → Howard Station, Chicago, IL)
+  route[1] steps=2 gtfsStops=8 matched=true
+    Google lines: Pulse Dempster Line | Yellow Line
+    matched 8 GTFS stops via pace+cta
+    GTFS stops:
+       1. Davis CTA Station  [Pulse Dempster Line]
+       2. Dodge Station  [Pulse Dempster Line]
+       3. St. Louis Station  [Pulse Dempster Line]
+       4. Crawford Station  [Pulse Dempster Line]
+       5. Dempster - Skokie CTA Station  [Pulse Dempster Line]
+       6. Dempster-Skokie  [Yellow Line]
+       7. Oakton-Skokie  [Yellow Line]
+       8. Howard  [Yellow Line]
+  ✓ pass (2/2 routes matched with ≥2 GTFS stops)
+
+ ✓ scripts/gtfs-smoke/smoke-gtfs.test.ts > GTFS smoke (manual / occasional) > has at least one case selected 1ms
+ ✓ scripts/gtfs-smoke/smoke-gtfs.test.ts > GTFS smoke (manual / occasional) > all selected cases reference registered regions/feeds 0ms
+ ✓ scripts/gtfs-smoke/smoke-gtfs.test.ts > GTFS smoke (manual / occasional) > PACE-1 · Chicago metro · Pace Suburban Bus: Pace suburban bus (Evanston, IL → Howard Station, Chicago, IL) 17874ms
+stdout | scripts/gtfs-smoke/smoke-gtfs.test.ts
+
+📄 Report written: C:\Documents\Code\ride-n-dine\scripts\gtfs-smoke\reports\last-report.md
+
+
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  00:01:13
+   Duration  18.27s (transform 74ms, setup 0ms, import 179ms, tests 17.88s, environment 0ms)
+
+
+---
+Exit code: 0
+Log file: C:\Documents\Code\ride-n-dine\scripts\gtfs-smoke\reports\last-run.log
+Report: C:\Documents\Code\ride-n-dine\scripts\gtfs-smoke\reports\last-report.md

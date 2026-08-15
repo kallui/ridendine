@@ -20,12 +20,10 @@ vi.mock("@/lib/server/session", () => ({
 import { POST } from "@/app/api/directions/route";
 
 describe("POST /api/directions sequential rate limit", () => {
-  const originalUpstashUrl = process.env.UPSTASH_REDIS_REST_URL;
-  const originalUpstashToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+  const originalRedisUrl = process.env.REDIS_URL;
 
   beforeEach(() => {
-    delete process.env.UPSTASH_REDIS_REST_URL;
-    delete process.env.UPSTASH_REDIS_REST_TOKEN;
+    delete process.env.REDIS_URL;
     resetMemoryQuota();
     vi.clearAllMocks();
     getOrCreateSessionId.mockResolvedValue("session-abc");
@@ -35,11 +33,10 @@ describe("POST /api/directions sequential rate limit", () => {
 
   afterEach(() => {
     resetMemoryQuota();
-    if (originalUpstashUrl !== undefined) {
-      process.env.UPSTASH_REDIS_REST_URL = originalUpstashUrl;
-    }
-    if (originalUpstashToken !== undefined) {
-      process.env.UPSTASH_REDIS_REST_TOKEN = originalUpstashToken;
+    if (originalRedisUrl !== undefined) {
+      process.env.REDIS_URL = originalRedisUrl;
+    } else {
+      delete process.env.REDIS_URL;
     }
   });
 
