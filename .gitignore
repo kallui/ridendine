@@ -10,7 +10,7 @@
 !.yarn/releases
 !.yarn/versions
 
-# GTFS zips from scripts/sync-gtfs.ts
+# GTFS zips + cooked indexes from scripts/sync-gtfs.ts
 /data/gtfs/
 
 # next.js

@@ -27,6 +27,74 @@ type GtfsIndex = {
   routeStops: Map<string, Map<number, string[][]>>;
 };
 
+/** Bump when the cooked JSON format changes in the future, so old files are ignored. */
+export const GTFS_INDEX_VERSION = 1 as const;
+
+// Type for the cooked JSON map of the GTFS data
+export type SerializedGtfsIndex = {
+  v: typeof GTFS_INDEX_VERSION;
+  stops: Record<string, StopInfo>;
+  routesByShortName: Record<string, string[]>;
+  routeStops: Record<string, Record<string, string[][]>>;
+};
+
+/** True if value is a plain object (not null / array). */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** Maps → JSON-safe objects so we can write current.json. */
+export function serializeGtfsIndex(idx: GtfsIndex): SerializedGtfsIndex {
+  const routeStops: SerializedGtfsIndex["routeStops"] = {};
+  for (const [routeId, dirs] of idx.routeStops) {
+    const dirObj: Record<string, string[][]> = {};
+    for (const [dir, patterns] of dirs) {
+      dirObj[String(dir)] = patterns;
+    }
+    routeStops[routeId] = dirObj;
+  }
+  return {
+    v: GTFS_INDEX_VERSION,
+    stops: Object.fromEntries(idx.stops),
+    routesByShortName: Object.fromEntries(idx.routesByShortName),
+    routeStops,
+  };
+}
+
+/** JSON-safe objects → Maps; throws if v is missing or not current. */
+export function deserializeGtfsIndex(data: unknown): GtfsIndex {
+  if (!isRecord(data) || data.v !== GTFS_INDEX_VERSION) {
+    throw new Error("invalid or outdated GTFS index JSON");
+  }
+  if (
+    !isRecord(data.stops) ||
+    !isRecord(data.routesByShortName) ||
+    !isRecord(data.routeStops)
+  ) {
+    throw new Error("invalid GTFS index JSON");
+  }
+
+  const routeStops = new Map<string, Map<number, string[][]>>();
+  for (const [routeId, dirs] of Object.entries(data.routeStops)) {
+    if (!isRecord(dirs)) continue;
+    const dirMap = new Map<number, string[][]>();
+    for (const [dir, patterns] of Object.entries(dirs)) {
+      if (Array.isArray(patterns))
+        dirMap.set(Number(dir), patterns as string[][]);
+    }
+    routeStops.set(routeId, dirMap);
+  }
+
+  return {
+    stops: new Map(Object.entries(data.stops)) as Map<string, StopInfo>,
+    routesByShortName: new Map(Object.entries(data.routesByShortName)) as Map<
+      string,
+      string[]
+    >,
+    routeStops,
+  };
+}
+
 // ---GTFS LRU  --------------------------------------------------------
 const MAX_HOT_FEEDS = Number(process.env.MAX_HOT_FEEDS ?? 3); // max # of feeds inside in memory (RAM)
 
@@ -131,9 +199,7 @@ async function readGtfsZip(feed: GtfsFeedSource): Promise<Uint8Array> {
   return new Uint8Array(await res.arrayBuffer());
 }
 
-async function loadGtfs(feed: GtfsFeedSource): Promise<GtfsIndex> {
-  const t = Date.now();
-  const zipBuffer = await readGtfsZip(feed);
+export function buildGtfsIndexFromZip(zipBuffer: Uint8Array): GtfsIndex {
   const files = unzipSync(zipBuffer);
 
   const decode = (name: string): string => {
@@ -142,21 +208,60 @@ async function loadGtfs(feed: GtfsFeedSource): Promise<GtfsIndex> {
     return new TextDecoder("utf-8").decode(buf);
   };
 
-  console.log("[GTFS] Parsing CSV files…");
-
   const stops = parseStops(decode("stops.txt"));
   const { routesByShortName, tripInfo } = parseRoutesAndTrips(
     decode("routes.txt"),
     decode("trips.txt"),
   );
   const routeStops = parseStopTimes(decode("stop_times.txt"), tripInfo);
-
-  const ms = Date.now() - t;
-  console.log(
-    `[GTFS] Ready (${feed.id}) — ${stops.size} stops, ${routesByShortName.size} routes (${ms} ms)`,
-  );
-
   return { stops, routesByShortName, routeStops };
+}
+
+function logReady(feedId: string, idx: GtfsIndex, source: string, ms: number) {
+  console.log(
+    `[GTFS] Ready (${feedId}) from ${source} — ${idx.stops.size} stops, ${idx.routesByShortName.size} routes (${ms} ms)`,
+  );
+}
+
+// load the cooked JSON map from .json file, and parse it into a GtfsIndex object
+async function loadCookedIndex(
+  dir: string,
+  feedId: string,
+): Promise<GtfsIndex | null> {
+  const file = path.join(path.resolve(dir), feedId, "current.json");
+  try {
+    const idx = deserializeGtfsIndex(JSON.parse(await readFile(file, "utf8")));
+    console.log(`[GTFS] Reading ${feedId} from ${file}`);
+    return idx;
+  } catch (e) {
+    const code = e && typeof e === "object" && "code" in e ? e.code : undefined;
+    if (code === "ENOENT") {
+      console.log(`[GTFS] no current.json for ${feedId}, parsing zip`);
+    } else {
+      console.warn(
+        `[GTFS] current.json unusable for ${feedId}, parsing zip:`,
+        e,
+      );
+    }
+    return null;
+  }
+}
+
+async function loadGtfs(feed: GtfsFeedSource): Promise<GtfsIndex> {
+  const t = Date.now();
+  const dir = process.env.GTFS_DIR;
+
+  if (dir) {
+    const cooked = await loadCookedIndex(dir, feed.id);
+    if (cooked) {
+      logReady(feed.id, cooked, "current.json", Date.now() - t);
+      return cooked;
+    }
+  }
+
+  const idx = buildGtfsIndexFromZip(await readGtfsZip(feed));
+  logReady(feed.id, idx, "zip", Date.now() - t);
+  return idx;
 }
 
 // ---- CSV helpers ----------------------------------------------------------

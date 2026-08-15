@@ -12,7 +12,9 @@
     "test:quota": "vitest run src/lib/rate-limit",
     "test:watch": "vitest",
     "smoke:gtfs": "node scripts/gtfs-smoke/cli.mjs",
-    "bench:gtfs-load": "npx tsx scripts/gtfs-load-bench.ts"
+    "bench:gtfs-load": "npx tsx scripts/gtfs-load-bench.ts",
+    "sync:gtfs": "npx tsx scripts/sync-gtfs.ts",
+    "sync:gtfs-index": "npx tsx scripts/sync-gtfs.ts --index-only"
   },
   "dependencies": {
     "@googlemaps/code-assist-mcp": "^0.2.0",
