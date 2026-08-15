@@ -1,0 +1,35 @@
+name: Deploy to Lightsail
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.LIGHTSAIL_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "${{ secrets.LIGHTSAIL_HOST }}" >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Deploy
+        run: |
+          HOST="${{ secrets.LIGHTSAIL_HOST }}"
+          USER="${{ secrets.LIGHTSAIL_USER || 'ubuntu' }}"
+          ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes "${USER}@${HOST}" '
+            set -euo pipefail
+            cd /home/ubuntu/ridendine
+            git checkout master
+            git pull
+            npm ci
+            export NODE_OPTIONS=--max-old-space-size=1536
+            npm run build
+            sudo -n systemctl restart ridendine
+          '
