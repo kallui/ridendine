@@ -21,7 +21,7 @@ variable "bundle_id" { default = "small_3_0" } # 2gb (potentially upgrade to 4gb
 
 # Value is set in terraform.tfvars file
 # .tfvars is kinda like local .env file
-variable "ssh_cidr" { 
-    description = "Public IP /32" 
-    type = string
+variable "ssh_cidr" {
+  description = "Public IP /32"
+  type        = string
 }

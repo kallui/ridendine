@@ -1,5 +1,5 @@
-# Weekly GTFS cook on a GitHub runner, then rsync to Lightsail.
-# Secrets: LIGHTSAIL_HOST, LIGHTSAIL_SSH_KEY. Optional: LIGHTSAIL_USER (default ubuntu).
+# Weekly GTFS cook on a GitHub runner, then upload complete feeds to S3.
+# Lightsail pulls from S3 (not SSH). Repo variables: GTFS_S3_BUCKET, AWS_GTFS_SYNC_ROLE_ARN.
 name: Sync GTFS
 
 on:
@@ -7,6 +7,10 @@ on:
     # GitHub cron is UTC only. 11:00 UTC Sunday = Sunday 3am PST / 4am PDT (Vancouver).
     - cron: "0 11 * * 0"
   workflow_dispatch:
+
+permissions:
+  id-token: write # req'd for OIDC -> aws
+  contents: read
 
 jobs:
   sync:
@@ -29,66 +33,32 @@ jobs:
           NODE_OPTIONS: --max-old-space-size=4096
         run: npm run sync:gtfs
 
-      - name: Setup SSH
-        id: setup-ssh
-        # Run step only if GTFS files were cooked successfully into current.json
+      - name: Configure AWS credentials (OIDC)
+        id: aws-creds
+        # Run only if at least one feed cooked a current.json
         if: hashFiles('data/gtfs/**/current.json') != ''
+
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_GTFS_SYNC_ROLE_ARN }}
+          aws-region: us-west-2
+
+      - name: Upload cooked GTFS files to S3
+        if: steps.aws-creds.outcome == 'success'
+        env:
+          BUCKET: ${{ vars.GTFS_S3_BUCKET }}
         run: |
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          printf '%s\n' "${{ secrets.LIGHTSAIL_SSH_KEY }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H "${{ secrets.LIGHTSAIL_HOST }}" >> ~/.ssh/known_hosts
-          chmod 644 ~/.ssh/known_hosts
-
-      - name: Rsync to Lightsail
-        # run if prev step success
-        if: steps.setup-ssh.outcome == 'success'
-        run: |
-          HOST="${{ secrets.LIGHTSAIL_HOST }}"
-          USER="${{ secrets.LIGHTSAIL_USER || 'ubuntu' }}"
-          SSH="ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes"
-
-          # Rsync to a temp folder on Lightsail first. This is to avoid rsync issues in the middle of large file transfer.
-          # --delete is ok because we're deleting the old files.
-          rsync -avz --delete \
-            -e "$SSH" \
-            data/gtfs/ \
-            "${USER}@${HOST}:/tmp/gtfs-incoming/"
-
-          # Move files from tmp to actual GTFS dir in Lightsail.
-          # $SSH "${USER}@${HOST}" ' COMMANDS ' ===> is running the commands INSIDE the lightsail server.
-          $SSH "${USER}@${HOST}" '
-            DEST=/var/lib/ridendine/gtfs
-            STAGING=/tmp/gtfs-incoming
-            mkdir -p "$DEST"
-
-            # Loop through each directory in staging
-            for dir in "$STAGING"/*; do
-              # Quick check to see if both current.json and current.zip exist, otherwise skip.
-              if [ ! -f "$dir/current.json" ] || [ ! -f "$dir/current.zip" ]; then
-                echo "skip $id (incomplete)"
-                continue
-              fi
-              # Check if directory exists, otherwise skip.
-              if [ ! -d "$dir" ]; then
-                echo "skip $id (directory not found)"
-                continue
-              fi
-              id=$(basename "$dir")
-              mkdir -p "$DEST/$id"
-
-              # Move current.* files to previous.* files.
-              [ -f "$DEST/$id/current.json" ] && mv -f "$DEST/$id/current.json" "$DEST/$id/previous.json"
-              [ -f "$DEST/$id/current.zip" ] && mv -f "$DEST/$id/current.zip" "$DEST/$id/previous.zip"
-
-              # Move new files to current.* files.
-              [ -f "$dir/current.json" ] && mv -f "$dir/current.json" "$DEST/$id/current.json"
-              [ -f "$dir/current.zip" ] && mv -f "$dir/current.zip" "$DEST/$id/current.zip"
-              echo "updated $id"
-            done
-            rm -rf "$STAGING"
-          '
+          # No --delete: a failed feed must leave last week's objects in S3.
+          for dir in data/gtfs/*; do
+            [ -d "$dir" ] || continue
+            id=$(basename "$dir")
+            if [ ! -f "$dir/current.json" ] || [ ! -f "$dir/current.zip" ]; then
+              echo "skip $id (incomplete)"
+              continue
+            fi
+            aws s3 sync "$dir/" "s3://${BUCKET}/gtfs/${id}/" --exclude "incoming.*" --exclude "previous.*"
+            echo "uploaded $id"
+          done
 
       - name: Fail if any feed failed
         # If fail because of specific feed fails, we want to assume this workflow is a fail so Admin can investigate.

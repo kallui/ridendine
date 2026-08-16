@@ -34,7 +34,7 @@ resource "aws_lightsail_instance_public_ports" "main" {
 
   # SSH port
   port_info {
-    protocol  = "tcp"
+    protocol = "tcp"
     # from_port and to_port is a range of accepted ports
     # 22-22 ==> only port 22 is accepted
     from_port = 22
