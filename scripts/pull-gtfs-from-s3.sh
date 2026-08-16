@@ -16,6 +16,9 @@ mkdir -p "$STAGING" "$DEST"
 # Sync (pull) current.* files from S3 to staging dir
 "$AWS" s3 sync "s3://${BUCKET}/${PREFIX}/" "$STAGING/"
 
+updated=0
+skipped=0
+
 # loop thru the dir (e.g translink) in the staging dir
 for dir in "$STAGING"/*
 do
@@ -24,7 +27,8 @@ do
 
     if [ ! -f "$dir/current.json" ] || [ ! -f "$dir/current.zip" ]
     then
-        echo "skip $id (missing files in staging)"
+        echo "skip $id (incomplete)"
+        skipped=$((skipped + 1))
         continue
     fi
 
@@ -38,6 +42,14 @@ do
     mv -f "$dir/current.json" "$DEST/$id/current.json"
     mv -f "$dir/current.zip" "$DEST/$id/current.zip"
     echo "updated $id"
+    updated=$((updated + 1))
 done
 
 rm -rf "$STAGING"
+
+if [ "$skipped" -eq 0 ]; then
+    echo "All $updated passed"
+else
+    echo "$updated passed, $skipped failed"
+    exit 1
+fi
