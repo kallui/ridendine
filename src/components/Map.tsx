@@ -113,6 +113,7 @@ function popupFocusLatLng(
   const point = projection.fromLatLngToPoint(
     new google.maps.LatLng(location.lat, location.lng),
   );
+  if (!point) return location;
   const scale = Math.pow(2, zoom);
   point.x += x / scale;
   point.y += y / scale;
@@ -441,14 +442,13 @@ export default function Map({
           },
         });
 
-        if (searchCircle.name) {
+        const stopName = searchCircle.name;
+        if (stopName) {
           const openLabel = () => {
             if (!infoWindowRef.current) {
               infoWindowRef.current = new google.maps.InfoWindow();
             }
-            infoWindowRef.current.setContent(
-              endpointLabelHtml(searchCircle.name),
-            );
+            infoWindowRef.current.setContent(endpointLabelHtml(stopName));
             infoWindowRef.current.open({ map, anchor: marker });
           };
           marker.addListener("mouseover", openLabel);
@@ -456,13 +456,11 @@ export default function Map({
         }
 
         marker.addListener("click", () => {
-          if (searchCircle.name) {
+          if (stopName) {
             if (!infoWindowRef.current) {
               infoWindowRef.current = new google.maps.InfoWindow();
             }
-            infoWindowRef.current.setContent(
-              endpointLabelHtml(searchCircle.name),
-            );
+            infoWindowRef.current.setContent(endpointLabelHtml(stopName));
             infoWindowRef.current.open({ map, anchor: marker });
           }
           onStopClick?.(idx);
