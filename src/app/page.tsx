@@ -83,7 +83,7 @@ function MapContent() {
   const [destinationLabel, setDestinationLabel] = useState("");
   const [userLocation, setUserLocation] =
     useState<google.maps.LatLngLiteral | null>(null);
-  const [locationError, setLocationError] = useState<string | null>(null);
+  const [, setLocationError] = useState<string | null>(null);
   const [routeError, setRouteError] = useState<string | null>(null);
   const [isFetchingDirections, setIsFetchingDirections] = useState(false);
   const { quota, canSearch, recordSearch, markBlocked } = useQuota();
@@ -166,14 +166,20 @@ function MapContent() {
   }, [selectedRouteIndex]);
 
   // Derived: restaurants/circles for the currently selected route (or empty if none selected)
-  const restaurants =
-    selectedRouteIndex !== null
-      ? (restaurantCache[selectedRouteIndex] ?? [])
-      : [];
-  const searchCircles =
-    selectedRouteIndex !== null
-      ? (searchCircleCache[selectedRouteIndex] ?? [])
-      : [];
+  const restaurants = useMemo(
+    () =>
+      selectedRouteIndex !== null
+        ? (restaurantCache[selectedRouteIndex] ?? [])
+        : [],
+    [selectedRouteIndex, restaurantCache],
+  );
+  const searchCircles = useMemo(
+    () =>
+      selectedRouteIndex !== null
+        ? (searchCircleCache[selectedRouteIndex] ?? [])
+        : [],
+    [selectedRouteIndex, searchCircleCache],
+  );
   const stopResolution: StopResolution =
     selectedRouteIndex !== null
       ? (stopResolutionCache[selectedRouteIndex] ?? "gtfs")

@@ -173,9 +173,12 @@ export default function Map({
 
   const flyRafRef = useRef<number | null>(null);
   const desktopOverlayRef = useRef(desktopOverlay);
-  desktopOverlayRef.current = desktopOverlay;
 
   // ── Keep the map sized to its pane, then frame the selected popup card ─
+
+  useEffect(() => {
+    desktopOverlayRef.current = desktopOverlay;
+  }, [desktopOverlay]);
 
   useEffect(() => {
     if (!map) return;
