@@ -127,6 +127,12 @@ body {
   box-shadow: -2px 2px 2px 0 rgba(0, 0, 0, 0.3) !important;
 }
 
+/* Map chrome disables selection; allow copy on our restaurant popup. */
+.gm-style .restaurant-map-popup {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
 .gm-style .gm-ui-hover-effect {
   opacity: 1 !important;
 }
@@ -275,6 +281,52 @@ body {
 .mdx-content p strong {
   font-weight: 600;
   color: var(--text-primary);
+}
+
+.mdx-content .mdx-table-wrap {
+  overflow-x: auto;
+  margin: 1rem 0 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+}
+
+.mdx-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.mdx-content th,
+.mdx-content td {
+  text-align: left;
+  padding: 0.625rem 0.875rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.mdx-content tr:last-child td {
+  border-bottom: none;
+}
+
+.mdx-content th {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  background: var(--accent-soft);
+}
+
+.mdx-content td {
+  color: var(--text-secondary);
+}
+
+.mdx-content td:first-child {
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
 }
 
 /* Kiki mascot — 2-frame horizontal sprite (64×64 per frame, 128×64 sheet) */

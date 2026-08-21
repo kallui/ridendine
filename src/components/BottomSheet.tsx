@@ -75,7 +75,7 @@ export default function BottomSheet({
 
   return (
     <div
-      className={`lg:hidden fixed bottom-0 left-0 right-0 h-[68vh] bg-card-bg border-t border-gray-800 rounded-t-2xl shadow-2xl z-30 flex flex-col ${isDragging ? "" : "transition-transform duration-360 ease-out"}`}
+      className={`lg:hidden fixed bottom-0 left-0 right-0 h-[80vh] bg-card-bg border-t border-gray-800 rounded-t-2xl shadow-2xl z-30 flex flex-col ${isDragging ? "" : "transition-transform duration-360 ease-out"}`}
       style={{ transform }}
     >
       {/* Handle bar — exactly h-20 so peek height matches the calc above */}

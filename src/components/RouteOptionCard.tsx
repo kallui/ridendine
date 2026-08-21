@@ -1,4 +1,5 @@
 import { getStepTransit, isTransitStep } from "@/lib/directions-normalize";
+import { formatTransitLineLabel } from "@/lib/alight-hint";
 
 interface RouteOptionCardProps {
   route: google.maps.DirectionsRoute;
@@ -32,7 +33,12 @@ export function getRouteHeadline(route: google.maps.DirectionsRoute): string {
       const line = getStepTransit(step)?.line;
       const icon = getVehicleIcon(line?.vehicle?.type || "");
       const name = line?.short_name || line?.name || "";
-      return name ? `${icon} ${name}` : null;
+      if (!name) return null;
+      const label = formatTransitLineLabel({
+        routeShortName: name,
+        vehicleType: line?.vehicle?.type,
+      });
+      return `${icon} ${label}`;
     })
     .filter(Boolean)
     .join("   →   ");
@@ -50,8 +56,6 @@ export default function RouteOptionCard({
 
   const transitSteps = leg.steps.filter(isTransitStep);
   const transfers = Math.max(0, transitSteps.length - 1);
-
-  // Use the exported utility
   const routeHeadline = getRouteHeadline(route);
 
   return (
@@ -67,9 +71,9 @@ export default function RouteOptionCard({
         <span className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-text-primary" />
       )}
       <div className="flex items-center justify-between gap-3">
-        <div className="flex-1 min-w-0">
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <div className="font-semibold text-text-primary text-sm truncate">
+            <div className="truncate font-semibold text-text-primary text-sm">
               {routeHeadline}
             </div>
             {isRecommended && !isSelected && (

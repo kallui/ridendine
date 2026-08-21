@@ -134,6 +134,36 @@ export function getRouteEndpoints(route: google.maps.DirectionsRoute): {
   };
 }
 
+/** Compass heading in degrees (0 = north) of the last segment into the destination. */
+export function getRouteEndHeading(route: google.maps.DirectionsRoute): number {
+  const path = buildRoutePath(route);
+  if (path.length < 2) return 0;
+
+  const to = path[path.length - 1];
+  let from = path[path.length - 2];
+  for (let i = path.length - 2; i >= 0; i--) {
+    if (!pointsEqual(path[i], to, 1e-5)) {
+      from = path[i];
+      break;
+    }
+  }
+  return headingDegrees(from, to);
+}
+
+function headingDegrees(
+  from: google.maps.LatLngLiteral,
+  to: google.maps.LatLngLiteral,
+): number {
+  const lat1 = (from.lat * Math.PI) / 180;
+  const lat2 = (to.lat * Math.PI) / 180;
+  const dLng = ((to.lng - from.lng) * Math.PI) / 180;
+  const y = Math.sin(dLng) * Math.cos(lat2);
+  const x =
+    Math.cos(lat1) * Math.sin(lat2) -
+    Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
+  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+}
+
 export type RouteSegment = {
   path: google.maps.LatLngLiteral[];
   /** Raw travel_mode string: "WALKING", "TRANSIT", etc. */

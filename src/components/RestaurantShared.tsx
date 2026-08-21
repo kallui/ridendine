@@ -1,5 +1,6 @@
 import type { MouseEvent } from "react";
 import { Restaurant } from "@/app/page";
+import { formatTransitLineLabel } from "@/lib/alight-hint";
 
 // ── External maps links ──────────────────────────────────────────────────────
 
@@ -36,6 +37,50 @@ const externalLinkProps = {
   target: "_blank" as const,
   rel: "noopener noreferrer" as const,
 };
+
+export function CornerUpRightIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M4 20v-7a4 4 0 014-4h12M15 5l5 4-5 4"
+      />
+    </svg>
+  );
+}
+
+export function MapPinIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+      />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+      />
+    </svg>
+  );
+}
 
 export function MapsLinks({
   restaurant,
@@ -178,7 +223,7 @@ function RatingDisplay({
   if (rating == null) {
     return (
       <span className={size === "card" ? "text-xs text-text-muted" : "text-sm text-text-muted"}>
-        N/A
+        Ratings N/A
       </span>
     );
   }
@@ -220,11 +265,13 @@ interface RestaurantDetailsProps {
   restaurant: Restaurant;
   variant?: "card" | "infowindow";
   onClick?: (restaurant: Restaurant) => void;
+  showAddress?: boolean;
 }
 
 export function RestaurantDetails({
   restaurant,
   variant = "card",
+  showAddress = true,
 }: RestaurantDetailsProps) {
   const isCard = variant === "card";
 
@@ -242,9 +289,10 @@ export function RestaurantDetails({
           <span className="text-text-muted text-xs">·</span>
           <DetourBadge minutes={restaurant.detourMinutes} />
         </div>
-        {restaurant.vicinity && (
-          <p className="text-xs text-text-muted line-clamp-1">
-            {restaurant.vicinity}
+        {showAddress && restaurant.vicinity && (
+          <p className="flex items-center gap-1.5 text-xs text-text-muted">
+            <MapPinIcon className="h-3.5 w-3.5 shrink-0" />
+            <span className="line-clamp-1">{restaurant.vicinity}</span>
           </p>
         )}
       </div>
@@ -282,8 +330,13 @@ export function RestaurantDetails({
         <DetourBadge minutes={restaurant.detourMinutes} />
       </div>
 
-      {/* Nearest stop — only when we have a real stop name */}
-      {restaurant.nearestStopName && (
+      {/* How to get off — prefer the compact alight hint */}
+      {restaurant.alightHint ? (
+        <p className="mb-2 flex items-start gap-2 text-sm text-text-secondary">
+          <CornerUpRightIcon className="mt-0.5 h-4 w-4 shrink-0 text-text-muted" />
+          <span>{restaurant.alightHint}</span>
+        </p>
+      ) : restaurant.nearestStopName ? (
         <div className="flex items-center gap-2 mb-2">
           <svg
             className="w-4 h-4 text-text-muted flex-shrink-0"
@@ -312,17 +365,22 @@ export function RestaurantDetails({
             </span>
             {restaurant.transitLineName && (
               <span className="ml-1 text-xs text-text-muted">
-                ({restaurant.transitLineName})
+                ({formatTransitLineLabel({
+                  routeShortName: restaurant.transitLineName,
+                  headsign: restaurant.transitHeadsign,
+                  vehicleType: restaurant.transitVehicleType,
+                })})
               </span>
             )}
           </p>
         </div>
-      )}
+      ) : null}
 
       {/* Address */}
       {restaurant.vicinity && (
-        <p className="text-xs text-gray-400 mb-3 line-clamp-2">
-          {restaurant.vicinity}
+        <p className="mb-3 flex items-start gap-2 text-xs text-gray-400">
+          <MapPinIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span className="line-clamp-2">{restaurant.vicinity}</span>
         </p>
       )}
 

@@ -5,6 +5,7 @@ import {
   extractPolylineCoordinates,
   getRouteBoundsPoints,
   getRouteEndpoints,
+  getRouteEndHeading,
 } from "@/lib/directions-paths";
 
 function createStep(
@@ -69,6 +70,12 @@ describe("directions-paths", () => {
       origin: { lat: 40.7, lng: -74.0 },
       destination: { lat: 40.72, lng: -73.98 },
     });
+  });
+
+  it("computes heading into the destination", () => {
+    const heading = getRouteEndHeading(createRouteWithSteps([createStep()]));
+    expect(heading).toBeGreaterThan(20);
+    expect(heading).toBeLessThan(70);
   });
 
   it("uses overview polyline when leg path is empty", () => {

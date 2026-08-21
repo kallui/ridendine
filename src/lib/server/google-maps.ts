@@ -1,4 +1,9 @@
-import type { PlaceSearchResult, WaypointInput } from "@/lib/places-types";
+import type {
+  PlacePhoto,
+  PlaceSearchResult,
+  WaypointInput,
+} from "@/lib/places-types";
+import { isValidPhotoReference } from "@/lib/place-photo";
 
 function getApiKey(): string {
   const key =
@@ -225,4 +230,82 @@ export async function fetchNearbyRestaurantsBatch(
   await Promise.all(Array.from({ length: workerCount }, () => worker()));
 
   return Array.from(byPlaceId.values());
+}
+
+const MAX_PLACE_PHOTOS = 10;
+
+type PlaceDetailsResponse = {
+  status: string;
+  result?: {
+    photos?: Array<{
+      photo_reference?: string;
+      html_attributions?: string[];
+    }>;
+  };
+  error_message?: string;
+};
+
+/** Photo references for the Google Maps user gallery (up to 10). */
+export async function fetchPlacePhotos(placeId: string): Promise<PlacePhoto[]> {
+  const url = new URL("https://maps.googleapis.com/maps/api/place/details/json");
+  url.searchParams.set("place_id", placeId);
+  url.searchParams.set("fields", "photos");
+  url.searchParams.set("key", getApiKey());
+
+  const response = await fetch(url.toString(), {
+    next: { revalidate: 86400 },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Place Details HTTP ${response.status}`);
+  }
+
+  const data = (await response.json()) as PlaceDetailsResponse;
+  if (data.status !== "OK") {
+    if (data.status === "ZERO_RESULTS" || data.status === "NOT_FOUND") {
+      return [];
+    }
+    throw new Error(data.error_message ?? `Place Details status: ${data.status}`);
+  }
+
+  return (data.result?.photos ?? [])
+    .filter(
+      (photo): photo is { photo_reference: string; html_attributions?: string[] } =>
+        typeof photo.photo_reference === "string" &&
+        isValidPhotoReference(photo.photo_reference),
+    )
+    .slice(0, MAX_PLACE_PHOTOS)
+    .map((photo) => ({
+      photoReference: photo.photo_reference,
+      htmlAttributions: photo.html_attributions ?? [],
+    }));
+}
+
+export async function fetchPlacePhotoMedia(
+  photoReference: string,
+  maxWidth: number,
+): Promise<{ body: ArrayBuffer; contentType: string }> {
+  const url = new URL("https://maps.googleapis.com/maps/api/place/photo");
+  url.searchParams.set("photo_reference", photoReference);
+  url.searchParams.set("maxwidth", String(maxWidth));
+  url.searchParams.set("key", getApiKey());
+
+  const response = await fetch(url.toString(), {
+    redirect: "follow",
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Place Photo HTTP ${response.status}`);
+  }
+
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.startsWith("image/")) {
+    throw new Error("Place Photo did not return an image");
+  }
+
+  return {
+    body: await response.arrayBuffer(),
+    contentType: contentType.split(";")[0]!.trim(),
+  };
 }

@@ -3,6 +3,8 @@ import {
   NEARBY_PAGE_TOKEN_DELAY_MS,
   NEARBY_SEARCH_PAGE_SIZE,
   fetchNearbyRestaurants,
+  fetchPlacePhotoMedia,
+  fetchPlacePhotos,
 } from "@/lib/server/google-maps";
 import type { PlaceSearchResult } from "@/lib/places-types";
 
@@ -197,5 +199,102 @@ describe("fetchNearbyRestaurants", () => {
 
     const promise = fetchNearbyRestaurants(location, radius);
     await expect(promise).rejects.toThrow("Invalid key");
+  });
+});
+
+describe("fetchPlacePhotos", () => {
+  beforeEach(() => {
+    vi.stubEnv("GOOGLE_MAPS_API_KEY", "test-key");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it("maps photo references from Place Details", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        status: "OK",
+        result: {
+          photos: [
+            {
+              photo_reference: "Aap_uEA7ob0Q-_c8tET_xCMa7k9pQ2nLmN0photoRefValue",
+              html_attributions: ["<a>Jane</a>"],
+            },
+          ],
+        },
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const photos = await fetchPlacePhotos("ChIJt2BdK0muEmsRUrB72QnQRxw");
+    expect(photos).toEqual([
+      {
+        photoReference: "Aap_uEA7ob0Q-_c8tET_xCMa7k9pQ2nLmN0photoRefValue",
+        htmlAttributions: ["<a>Jane</a>"],
+      },
+    ]);
+    expect(fetchMock.mock.calls[0]?.[0]).toContain("details/json");
+  });
+
+  it("returns an empty list when the place has no photos", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ status: "NOT_FOUND" }),
+    }));
+
+    await expect(fetchPlacePhotos("ChIJt2BdK0muEmsRUrB72QnQRxw")).resolves.toEqual(
+      [],
+    );
+  });
+});
+
+describe("fetchPlacePhotoMedia", () => {
+  beforeEach(() => {
+    vi.stubEnv("GOOGLE_MAPS_API_KEY", "test-key");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it("returns image bytes and content type", async () => {
+    const body = new ArrayBuffer(4);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        headers: new Headers({ "content-type": "image/jpeg" }),
+        arrayBuffer: async () => body,
+      }),
+    );
+
+    const result = await fetchPlacePhotoMedia(
+      "Aap_uEA7ob0Q-_c8tET_xCMa7k9pQ2nLmN0photoRefValue",
+      400,
+    );
+    expect(result.contentType).toBe("image/jpeg");
+    expect(result.body).toBe(body);
+  });
+
+  it("rejects non-image responses", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        headers: new Headers({ "content-type": "application/json" }),
+        arrayBuffer: async () => new ArrayBuffer(0),
+      }),
+    );
+
+    await expect(
+      fetchPlacePhotoMedia(
+        "Aap_uEA7ob0Q-_c8tET_xCMa7k9pQ2nLmN0photoRefValue",
+        400,
+      ),
+    ).rejects.toThrow("did not return an image");
   });
 });
