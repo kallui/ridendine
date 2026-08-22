@@ -31,8 +31,12 @@ export default function RestaurantCard({
       }}
       onMouseEnter={() => onHover?.(restaurant)}
       onMouseLeave={() => onHover?.(null)}
-      className="flex w-full cursor-pointer items-start gap-3 rounded-lg border border-border bg-card-bg px-2.5 py-2 text-left select-text hover:border-text-muted hover:shadow-md transition-all"
+      className="relative flex w-full cursor-pointer items-start gap-3 rounded-lg border border-border bg-card-bg px-2.5 py-2 text-left select-text transition-all hover:border-text-muted hover:shadow-md"
     >
+      <span
+        aria-hidden
+        className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-restaurant"
+      />
       <button
         type="button"
         onClick={(event) => {

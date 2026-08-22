@@ -7,6 +7,7 @@ import type { AutocompletePrediction } from "@/hooks/useCustomPlacesAutocomplete
 import TripEndpoints from "./TripEndpoints";
 
 import type { QuotaResult } from "@/lib/rate-limit/types";
+import { getDevQuickSearch } from "@/lib/dev-quick-search";
 
 /** Label passed to directions — resolved to GPS coords in page.tsx */
 const CURRENT_LOCATION_LABEL = "Current Location";
@@ -165,6 +166,7 @@ export default function RouteSearch({
   quota = null,
   embedded = false,
 }: RouteSearchProps) {
+  const devQuickSearch = getDevQuickSearch();
   const skipNextAutoSearchRef = useRef(false);
   // After the first completed search, editing O/D must use Search / Enter.
   // Ref keeps auto-search effect deps stable (avoids HMR dep-array size errors).
@@ -293,6 +295,21 @@ export default function RouteSearch({
         nextDestinationInput,
       );
     }
+  };
+
+  const handleDevQuickSearch = () => {
+    if (!devQuickSearch || searchDisabled) return;
+    skipNextAutoSearchRef.current = true;
+    originAC.setInput(devQuickSearch.origin);
+    originAC.setSelectedPrediction(null);
+    destAC.setInput(devQuickSearch.destination);
+    destAC.setSelectedPrediction(null);
+    onSearch(
+      devQuickSearch.origin,
+      devQuickSearch.destination,
+      devQuickSearch.origin,
+      devQuickSearch.destination,
+    );
   };
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -528,7 +545,20 @@ export default function RouteSearch({
           className="px-3 py-2.5 flex flex-col gap-2"
           onSubmit={handleSubmit}
         >
-          <SearchPurposeHeading />
+          <div className="flex items-start justify-between gap-2">
+            <SearchPurposeHeading />
+            {devQuickSearch && (
+              <button
+                type="button"
+                onClick={handleDevQuickSearch}
+                disabled={searchDisabled}
+                title={`${devQuickSearch.origin} → ${devQuickSearch.destination}`}
+                className="shrink-0 rounded-md border border-dashed border-amber-500/60 px-1.5 py-0.5 text-[10px] font-medium text-amber-500 transition-colors hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Dev: {devQuickSearch.label}
+              </button>
+            )}
+          </div>
           <div className="flex gap-3">
             {/* Route line indicator */}
             <div className="flex flex-col items-center py-1.5 shrink-0 w-4">

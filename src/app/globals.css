@@ -20,6 +20,8 @@
   --accent: #e4e4e7;
   --accent-ring: #a1a1aa;
   --accent-soft: #ececee;
+  --restaurant: #d13a3a;
+  --restaurant-emphasis: #b32626;
 }
 
 :root[data-theme="dark"] {
@@ -37,6 +39,8 @@
   --accent: #3f3f46;
   --accent-ring: #52525b;
   --accent-soft: #27272a;
+  --restaurant: #d13a3a;
+  --restaurant-emphasis: #b32626;
 }
 
 @theme inline {
@@ -54,6 +58,8 @@
   --color-text-primary: var(--text-primary);
   --color-text-secondary: var(--text-secondary);
   --color-text-muted: var(--text-muted);
+  --color-restaurant: var(--restaurant);
+  --color-restaurant-emphasis: var(--restaurant-emphasis);
 
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
@@ -75,6 +81,8 @@
     --accent: #3f3f46;
     --accent-ring: #52525b;
     --accent-soft: #27272a;
+    --restaurant: #d13a3a;
+    --restaurant-emphasis: #b32626;
   }
 }
 

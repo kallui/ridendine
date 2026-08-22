@@ -4,9 +4,8 @@ import {
   Map as GoogleMap,
   useMap,
   AdvancedMarker,
-  Pin,
 } from "@vis.gl/react-google-maps";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Restaurant, SearchCircle, StopGroup } from "@/app/page";
 import {
   getRouteBoundsPoints,
@@ -15,7 +14,53 @@ import {
   getRouteEndHeading,
   getRouteSegments,
 } from "@/lib/directions-paths";
+import {
+  clusterContaining,
+  clusterRestaurantTags,
+} from "@/lib/restaurant-tag-clusters";
 import RestaurantMarkerPopup from "./RestaurantMarkerPopup";
+
+function RestaurantNameTag({
+  name,
+  extraCount,
+  dimmed,
+  emphasized,
+}: {
+  name: string;
+  extraCount: number;
+  dimmed: boolean;
+  emphasized: boolean;
+}) {
+  const title =
+    extraCount > 0 ? `${name} · ${extraCount} more — zoom in` : name;
+
+  const fill = dimmed
+    ? "bg-restaurant/55 text-white/90"
+    : emphasized
+      ? "bg-restaurant-emphasis text-white shadow-md"
+      : "bg-restaurant text-white";
+  const caret = dimmed
+    ? "border-t-restaurant/55"
+    : emphasized
+      ? "border-t-restaurant-emphasis"
+      : "border-t-restaurant";
+
+  return (
+    <div className="flex flex-col items-center drop-shadow-sm" title={title}>
+      <div
+        className={`flex max-w-[11rem] items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium ${fill}`}
+      >
+        <span className="truncate">{name}</span>
+        {extraCount > 0 && (
+          <span className="shrink-0 text-white/80">+{extraCount}</span>
+        )}
+      </div>
+      <div
+        className={`h-0 w-0 border-x-[5px] border-t-[6px] border-x-transparent ${caret}`}
+      />
+    </div>
+  );
+}
 
 /** Single-letter badge shown on the map at each transit boarding point. */
 function getTransitShortLabel(vehicleType?: string): string {
@@ -165,6 +210,9 @@ export default function Map({
   desktopOverlay = "none",
 }: MapProps) {
   const map = useMap();
+  const [mapZoom, setMapZoom] = useState(zoomLevel);
+  const [popupRender, setPopupRender] = useState<Restaurant | null>(null);
+  const [popupOpen, setPopupOpen] = useState(false);
   const polylinesRef = useRef<google.maps.Polyline[]>([]);
   const transitBadgesRef = useRef<google.maps.Marker[]>([]);
   const circlesRef = useRef<google.maps.Circle[]>([]);
@@ -590,12 +638,70 @@ export default function Map({
     onStopClick,
   ]);
 
-  // ── Restaurant markers ────────────────────────────────────────────────────
-  // Show every restaurant; dim markers at other stops when one stop is selected.
+  // ── Restaurant tags ───────────────────────────────────────────────────────
+  // Cluster overlapping names; the top restaurant keeps its label, others become +N.
   const popupRestaurant = hoveredRestaurant ?? selectedRestaurant;
   const isPopupPreview =
     Boolean(hoveredRestaurant) &&
     hoveredRestaurant?.placeId !== selectedRestaurant?.placeId;
+
+  useEffect(() => {
+    if (popupRestaurant) {
+      setPopupRender(popupRestaurant);
+      setPopupOpen(true);
+      return;
+    }
+    setPopupOpen(false);
+  }, [popupRestaurant]);
+
+  const restaurantClusters = useMemo(() => {
+    const preferredIds = [selectedRestaurant?.placeId];
+
+    if (selectedStopIndex == null) {
+      return clusterRestaurantTags(restaurants, mapZoom, { preferredIds });
+    }
+
+    const focusIds = new Set(
+      restaurants
+        .filter((restaurant) => restaurant.nearestStopIndex === selectedStopIndex)
+        .map((restaurant) => restaurant.placeId),
+    );
+    for (const id of preferredIds) {
+      if (id) focusIds.add(id);
+    }
+
+    const focus = restaurants.filter((restaurant) =>
+      focusIds.has(restaurant.placeId),
+    );
+    const background = restaurants.filter(
+      (restaurant) => !focusIds.has(restaurant.placeId),
+    );
+
+    return [
+      ...clusterRestaurantTags(focus, mapZoom, { preferredIds }),
+      ...clusterRestaurantTags(background, mapZoom),
+    ];
+  }, [
+    restaurants,
+    mapZoom,
+    selectedStopIndex,
+    selectedRestaurant,
+  ]);
+
+  const popupCluster = clusterContaining(
+    restaurantClusters,
+    (popupRestaurant ?? popupRender)?.placeId,
+  );
+  const hiddenTagId =
+    popupCluster?.restaurant.placeId ?? popupRender?.placeId ?? null;
+  const popupPosition =
+    isPopupPreview && popupCluster
+      ? popupCluster.restaurant.location
+      : popupRender?.location;
+  const popupFromName =
+    isPopupPreview && popupCluster
+      ? popupCluster.restaurant.name
+      : popupRender?.name;
 
   return (
     <div className="h-full w-full">
@@ -609,6 +715,7 @@ export default function Map({
       isFractionalZoomEnabled
       mapId={mapId}
       colorScheme={colorScheme}
+      onZoomChanged={(event) => setMapZoom(event.detail.zoom)}
       onClick={(event) => {
         const target = event.domEvent?.target;
         if (target instanceof Element && target.closest(".restaurant-map-popup")) {
@@ -617,7 +724,8 @@ export default function Map({
         onMapClick?.();
       }}
     >
-      {restaurants.map((restaurant) => {
+      {restaurantClusters.map((cluster) => {
+        const restaurant = cluster.restaurant;
         const isSelectedStop =
           selectedStopIndex !== null &&
           restaurant.nearestStopIndex === selectedStopIndex;
@@ -632,6 +740,8 @@ export default function Map({
           !isHighlighted &&
           !isHovered;
 
+        if (restaurant.placeId === hiddenTagId) return null;
+
         return (
           <AdvancedMarker
             key={restaurant.placeId}
@@ -642,37 +752,31 @@ export default function Map({
               onSelectRestaurant(restaurant);
             }}
           >
-            <Pin
-              background={
-                isDimmed
-                  ? "#9CA3AF"
-                  : isHovered || isSelectedStop || isHighlighted
-                    ? "#F97316"
-                    : "#EF4444"
-              }
-              borderColor={
-                isDimmed
-                  ? "#6B7280"
-                  : isHovered || isSelectedStop || isHighlighted
-                    ? "#C2410C"
-                    : "#991B1B"
-              }
-              glyphColor={isDimmed ? "#E5E7EB" : "#FEE2E2"}
-              scale={isSelectedStop || isHighlighted || isHovered ? 1.2 : 1}
+            <RestaurantNameTag
+              name={restaurant.name}
+              extraCount={cluster.extraCount}
+              dimmed={isDimmed}
+              emphasized={isHovered || isSelectedStop || isHighlighted}
             />
           </AdvancedMarker>
         );
       })}
 
-      {popupRestaurant && (
+      {popupRender && popupPosition && (
         <RestaurantMarkerPopup
-          key={popupRestaurant.placeId}
-          restaurant={popupRestaurant}
+          key={popupRender.placeId}
+          restaurant={popupRender}
+          position={popupPosition}
+          fromName={popupFromName ?? popupRender.name}
+          open={popupOpen && popupRestaurant?.placeId === popupRender.placeId}
           preview={isPopupPreview}
           onClose={
             isPopupPreview ? undefined : () => onSelectRestaurant(null)
           }
           onOpenPhotos={isPopupPreview ? undefined : onOpenPhotos}
+          onExited={() => {
+            if (!popupRestaurant) setPopupRender(null);
+          }}
         />
       )}
     </GoogleMap>
