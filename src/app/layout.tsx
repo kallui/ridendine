@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 const SITE_NAME = "RideNDine";
 const SITE_DESCRIPTION =
   "Discover restaurants and food stops along your public transit route. RideNDine helps commuters find convenient places to eat without searching through every stop along the way.";
-const SITE_URL = "https://www.ridendine.app";
+const SITE_URL = "https://ridendine.app";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
