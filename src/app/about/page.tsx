@@ -3,7 +3,7 @@ import Content from "./content.mdx";
 
 export default function AboutPage() {
   return (
-    <AboutLayout>
+    <AboutLayout showReleaseNotes>
       <Content />
     </AboutLayout>
   );

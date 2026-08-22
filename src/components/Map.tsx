@@ -212,7 +212,6 @@ export default function Map({
   const map = useMap();
   const [mapZoom, setMapZoom] = useState(zoomLevel);
   const [popupRender, setPopupRender] = useState<Restaurant | null>(null);
-  const [popupOpen, setPopupOpen] = useState(false);
   const polylinesRef = useRef<google.maps.Polyline[]>([]);
   const transitBadgesRef = useRef<google.maps.Marker[]>([]);
   const circlesRef = useRef<google.maps.Circle[]>([]);
@@ -644,15 +643,11 @@ export default function Map({
   const isPopupPreview =
     Boolean(hoveredRestaurant) &&
     hoveredRestaurant?.placeId !== selectedRestaurant?.placeId;
+  const popupOpen = Boolean(popupRestaurant);
 
-  useEffect(() => {
-    if (popupRestaurant) {
-      setPopupRender(popupRestaurant);
-      setPopupOpen(true);
-      return;
-    }
-    setPopupOpen(false);
-  }, [popupRestaurant]);
+  if (popupRestaurant && popupRestaurant.placeId !== popupRender?.placeId) {
+    setPopupRender(popupRestaurant);
+  }
 
   const restaurantClusters = useMemo(() => {
     const preferredIds = [selectedRestaurant?.placeId];
