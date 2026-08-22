@@ -1,133 +1,116 @@
 "use client";
 
+import { useState } from "react";
 import { Restaurant, StopGroup } from "@/app/page";
 import RestaurantCard from "./RestaurantCard";
+import { formatTransitLineLabel } from "@/lib/alight-hint";
 
-/** Score for picking the "top pick" — balances rating with review volume. */
-function recommendScore(r: Restaurant): number {
-  return (r.rating ?? 0) * Math.log((r.userRatingsTotal ?? 0) + 1);
-}
-
-function getTopRestaurant(restaurants: Restaurant[]): Restaurant | null {
-  if (!restaurants.length) return null;
-  return restaurants.reduce((best, r) =>
-    recommendScore(r) > recommendScore(best) ? r : best,
-  );
-}
+const VISIBLE_PER_STOP = 4;
 
 interface StopGroupCardProps {
   group: StopGroup;
-  isExpanded: boolean;
-  onToggle: () => void;
+  isSelected: boolean;
+  onSelect: () => void;
   onRestaurantClick: (restaurant: Restaurant) => void;
+  onPhotoClick?: (restaurant: Restaurant) => void;
+  onRestaurantHover?: (restaurant: Restaurant | null) => void;
 }
 
 export default function StopGroupCard({
   group,
-  isExpanded,
-  onToggle,
+  isSelected,
+  onSelect,
   onRestaurantClick,
+  onPhotoClick,
+  onRestaurantHover,
 }: StopGroupCardProps) {
-  const topRestaurant = getTopRestaurant(group.restaurants);
+  const [showAll, setShowAll] = useState(false);
+  const hiddenCount = Math.max(0, group.restaurants.length - VISIBLE_PER_STOP);
+  const visibleRestaurants = showAll
+    ? group.restaurants
+    : group.restaurants.slice(0, VISIBLE_PER_STOP);
+
+  const headerTone = group.isTransfer
+    ? "border-amber-500/25 bg-amber-500/10"
+    : "border-border bg-accent-soft";
 
   return (
-    <div
-      className={`rounded-xl border transition-all ${
-        group.isTransfer
-          ? "border-amber-500/40 bg-amber-500/5 hover:border-amber-500/60 hover:shadow-md"
-          : "border-border bg-card-bg hover:border-text-muted hover:shadow-md"
+    <section
+      data-stop-index={group.stopIndex}
+      className={`border-b border-border bg-card-bg ${
+        isSelected
+          ? "border-l-[3px] border-l-primary"
+          : group.isTransfer
+            ? "border-l-[3px] border-l-amber-500"
+            : "border-l-[3px] border-l-transparent"
       }`}
     >
-      {/* ── Stop header (always visible, click to expand/collapse) ── */}
       <button
-        onClick={onToggle}
-        className={`w-full flex items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-accent-soft/40 ${
-          isExpanded ? "rounded-t-xl" : "rounded-xl"
-        }`}
-        aria-expanded={isExpanded}
+        type="button"
+        onClick={onSelect}
+        className={`sticky top-0 z-10 flex w-full items-start gap-3 border-b px-4 py-3 text-left ${headerTone}`}
       >
-        {/* Stop dot */}
         <div
-          className={`mt-1 shrink-0 w-2.5 h-2.5 rounded-full border-2 ${
+          className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full border-2 ${
             group.isTransfer
               ? "border-amber-500 bg-amber-500/30"
               : "border-primary bg-primary/20"
           }`}
         />
 
-        <div className="flex-1 min-w-0">
-          {/* Name row + badges */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-semibold text-sm text-text-primary leading-snug">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-semibold leading-snug text-text-primary">
               {group.stopName}
             </span>
 
             {group.isTransfer && (
-              <span className="shrink-0 inline-flex items-center gap-0.5 text-xs font-medium px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-600 dark:text-amber-400">
+              <span className="inline-flex shrink-0 items-center gap-0.5 rounded bg-amber-500/20 px-1.5 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400">
                 ↔ Transfer
               </span>
             )}
 
             {group.transitLineName && (
-              <span className="shrink-0 text-xs font-medium px-1.5 py-0.5 rounded bg-primary/10 text-primary">
-                {group.transitLineName}
+              <span className="shrink-0 rounded bg-primary/10 px-1.5 py-0.5 text-xs font-medium text-primary">
+                {formatTransitLineLabel({
+                  routeShortName: group.transitLineName,
+                  headsign: group.transitHeadsign,
+                  vehicleType: group.transitVehicleType,
+                })}
               </span>
             )}
           </div>
 
-          {/* Restaurant count */}
-          <p className="text-xs text-text-muted mt-0.5">
+          <p className="mt-0.5 text-xs text-text-muted">
             {group.restaurants.length}{" "}
             {group.restaurants.length === 1 ? "restaurant" : "restaurants"} nearby
           </p>
-
-          {/* Top pick preview — only when collapsed */}
-          {!isExpanded && topRestaurant && (
-            <p className="text-xs text-text-secondary mt-1 truncate">
-              <span className="text-text-muted">Top pick: </span>
-              {topRestaurant.name}
-              {topRestaurant.detourMinutes === 0 ? (
-                <span className="text-green-500 ml-1">· No detour</span>
-              ) : (
-                <span className="text-text-muted ml-1">
-                  · +{topRestaurant.detourMinutes} min
-                </span>
-              )}
-            </p>
-          )}
         </div>
-
-        {/* Chevron */}
-        <svg
-          className={`w-4 h-4 shrink-0 mt-0.5 text-text-muted transition-transform duration-200 ${
-            isExpanded ? "rotate-180" : ""
-          }`}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-          aria-hidden="true"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M19 9l-7 7-7-7"
-          />
-        </svg>
       </button>
 
-      {/* ── Expanded restaurant list ── */}
-      {isExpanded && (
-        <div className="border-t border-border/50 px-3 pb-3 pt-2 space-y-2">
-          {group.restaurants.map((restaurant) => (
-            <RestaurantCard
-              key={restaurant.placeId}
-              restaurant={restaurant}
-              onClick={onRestaurantClick}
-            />
-          ))}
-        </div>
-      )}
-    </div>
+      <div className="space-y-2 px-3 py-2">
+        {visibleRestaurants.map((restaurant) => (
+          <RestaurantCard
+            key={restaurant.placeId}
+            restaurant={restaurant}
+            onClick={onRestaurantClick}
+            onPhotoClick={onPhotoClick}
+            onHover={onRestaurantHover}
+          />
+        ))}
+
+        {hiddenCount > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowAll((open) => !open)}
+            className="w-full py-1.5 text-center text-xs font-medium text-text-secondary hover:text-text-primary"
+          >
+            {showAll
+              ? "Show fewer"
+              : `${hiddenCount} more at this stop`}
+          </button>
+        )}
+      </div>
+    </section>
   );
 }

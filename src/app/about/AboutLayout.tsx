@@ -15,7 +15,7 @@ export default function AboutLayout({
     <div className="h-screen overflow-y-auto bg-app-bg text-text-primary">
       <Navbar themeMode={themeMode} onToggleTheme={toggleTheme} />
 
-      <main className="max-w-2xl mx-auto px-6 pt-28 pb-16">
+      <main className="max-w-2xl mx-auto px-6 pt-8 pb-16">
         {/* Header */}
         <div className="mb-10">
           <Link

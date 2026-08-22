@@ -26,7 +26,6 @@
     "@turf/turf": "^7.2.0",
     "@types/mdx": "^2.0.14",
     "@types/next-pwa": "^5.6.9",
-    "@vercel/analytics": "^2.0.1",
     "@vis.gl/react-google-maps": "^1.7.1",
     "fflate": "^0.8.3",
     "framer-motion": "^12.35.2",
@@ -36,7 +35,8 @@
     "next-pwa": "^5.6.0",
     "pg": "^8.16.3",
     "react": "19.2.0",
-    "react-dom": "19.2.0"
+    "react-dom": "19.2.0",
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

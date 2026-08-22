@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -16,7 +15,7 @@ const geistMono = Geist_Mono({
 const SITE_NAME = "RideNDine";
 const SITE_DESCRIPTION =
   "Discover restaurants and food stops along your public transit route. RideNDine helps commuters find convenient places to eat without searching through every stop along the way.";
-const SITE_URL = "https://www.ridendine.app";
+const SITE_URL = "https://ridendine.app";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -245,7 +244,6 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         {children}
-        <Analytics />
       </body>
     </html>
   );

@@ -8,7 +8,7 @@ interface NavbarProps {
 
 export default function Navbar({ themeMode, onToggleTheme }: NavbarProps) {
   return (
-    <nav className="fixed top-0 left-0 right-0 z-40 bg-card-bg/95 backdrop-blur-md text-text-primary px-6 py-3 shadow-lg border-b border-border">
+    <nav className="relative z-40 shrink-0 bg-card-bg text-text-primary px-6 py-3 border-b border-border">
       <div className="flex items-center justify-between">
         <Link
           href="/"
@@ -22,8 +22,11 @@ export default function Navbar({ themeMode, onToggleTheme }: NavbarProps) {
             className="h-12 w-12"
             priority
           />
-          <span className="text-lg font-semibold tracking-tight text-text-primary">
-            RideNDine
+          <span className="flex flex-col leading-tight">
+            <span className="text-lg font-semibold tracking-tight text-text-primary">
+              RideNDine
+            </span>
+            <span className="text-xs text-text-muted">Food along your ride</span>
           </span>
         </Link>
 

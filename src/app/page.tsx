@@ -1,11 +1,13 @@
 "use client";
 
-import Map from "@/components/Map";
+import RouteMap from "@/components/Map";
 import Navbar from "@/components/Navbar";
 import RouteSearch from "@/components/RouteSearch";
 import RestaurantSidebar from "@/components/RestaurantSidebar";
 import RouteSelectionPanel from "@/components/RouteSelectionPanel";
+import TripContextBar from "@/components/TripContextBar";
 import BottomSheet from "@/components/BottomSheet";
+import PhotoLightbox from "@/components/PhotoLightbox";
 import { getRouteHeadline } from "@/components/RouteOptionCard";
 import { APIProvider } from "@vis.gl/react-google-maps";
 import { useState, useEffect, useRef, useMemo } from "react";
@@ -28,6 +30,8 @@ import {
 import type { PlaceSearchResult } from "@/lib/places-types";
 import { computeSearchPoints } from "@/lib/route-sampling";
 import { formatStopName } from "@/lib/format-stop-name";
+import { isValidPhotoReference } from "@/lib/place-photo";
+import { formatAlightHint } from "@/lib/alight-hint";
 
 export type Restaurant = {
   placeId: string;
@@ -43,21 +47,31 @@ export type Restaurant = {
   nearestStopIndex: number; // route-order index into the searchCircles array
   detourMinutes: number; // walking time from the nearest stop (~80 m/min)
   transitLineName?: string; // "99", "Expo Line", etc.
+  transitHeadsign?: string; // "Waterfront", "UBC"
+  transitVehicleType?: string; // Google vehicle type, e.g. BUS
+  alightHint?: string; // "Take Expo Line (Waterfront), then Bus 49 (UBC) · get off at Joyce St"
+  photoReference?: string; // Nearby Search cover photo
 };
 
 export type StopGroup = {
   stopName: string;
   stopIndex: number;
   center: google.maps.LatLngLiteral;
-  restaurants: Restaurant[]; // sorted by detourMinutes asc
+  restaurants: Restaurant[];
   isTransfer: boolean; // user changes transit line at this stop
   transitLineName?: string;
+  transitHeadsign?: string;
+  transitVehicleType?: string;
 };
 
 export type SearchCircle = {
   center: google.maps.LatLngLiteral;
   radius: number;
   name?: string;
+  routeShortName?: string;
+  headsign?: string;
+  vehicleType?: string;
+  endpointKind?: "origin" | "destination";
 };
 
 /** How search points were resolved: real GTFS stops vs polyline sampling. */
@@ -69,7 +83,7 @@ function MapContent() {
   const [destinationLabel, setDestinationLabel] = useState("");
   const [userLocation, setUserLocation] =
     useState<google.maps.LatLngLiteral | null>(null);
-  const [locationError, setLocationError] = useState<string | null>(null);
+  const [, setLocationError] = useState<string | null>(null);
   const [routeError, setRouteError] = useState<string | null>(null);
   const [isFetchingDirections, setIsFetchingDirections] = useState(false);
   const { quota, canSearch, recordSearch, markBlocked } = useQuota();
@@ -99,6 +113,10 @@ function MapContent() {
   const showBounds = true;
   const [selectedRestaurant, setSelectedRestaurant] =
     useState<Restaurant | null>(null);
+  const [hoveredRestaurant, setHoveredRestaurant] =
+    useState<Restaurant | null>(null);
+  const [lightboxRestaurant, setLightboxRestaurant] =
+    useState<Restaurant | null>(null);
   const [selectedStopIndex, setSelectedStopIndex] = useState<number | null>(null);
   const activeDirectionsRequestIdRef = useRef(0);
   const activeRestaurantSearchIdRef = useRef(0);
@@ -106,6 +124,8 @@ function MapContent() {
   // === MOBILE BOTTOM SHEET ===
   const [isBottomSheetExpanded, setIsBottomSheetExpanded] = useState(false);
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
+  const [isRoutePanelExpanded, setIsRoutePanelExpanded] = useState(true);
+  const [isDesktopPanelCollapsed, setIsDesktopPanelCollapsed] = useState(false);
 
 
   // Request user location on mount (only once)
@@ -146,21 +166,26 @@ function MapContent() {
   }, [selectedRouteIndex]);
 
   // Derived: restaurants/circles for the currently selected route (or empty if none selected)
-  const restaurants =
-    selectedRouteIndex !== null
-      ? (restaurantCache[selectedRouteIndex] ?? [])
-      : [];
-  const searchCircles =
-    selectedRouteIndex !== null
-      ? (searchCircleCache[selectedRouteIndex] ?? [])
-      : [];
+  const restaurants = useMemo(
+    () =>
+      selectedRouteIndex !== null
+        ? (restaurantCache[selectedRouteIndex] ?? [])
+        : [],
+    [selectedRouteIndex, restaurantCache],
+  );
+  const searchCircles = useMemo(
+    () =>
+      selectedRouteIndex !== null
+        ? (searchCircleCache[selectedRouteIndex] ?? [])
+        : [],
+    [selectedRouteIndex, searchCircleCache],
+  );
   const stopResolution: StopResolution =
     selectedRouteIndex !== null
       ? (stopResolutionCache[selectedRouteIndex] ?? "gtfs")
       : "gtfs";
 
-  // Group restaurants by their nearest stop, in route order, to feed the
-  // accordion sidebar and the smart map marker filter.
+  // Group restaurants by their nearest stop, in route order.
   const stopGroups = useMemo((): StopGroup[] => {
     if (restaurants.length === 0 || searchCircles.length === 0) return [];
 
@@ -175,14 +200,16 @@ function MapContent() {
       const stopIndex = parseInt(stopIndexStr, 10);
       const circle = searchCircles[stopIndex];
       if (!circle) continue;
-      const transitLineName = rests.find((r) => r.transitLineName)?.transitLineName;
+      const sample = rests.find((r) => r.transitLineName);
       groups.push({
         stopName: circle.name ?? `Stop ${stopIndex + 1}`,
         stopIndex,
         center: circle.center,
-        restaurants: [...rests].sort((a, b) => a.detourMinutes - b.detourMinutes),
+        restaurants: [...rests],
         isTransfer: false,
-        transitLineName,
+        transitLineName: sample?.transitLineName,
+        transitHeadsign: sample?.transitHeadsign,
+        transitVehicleType: sample?.transitVehicleType,
       });
     }
 
@@ -282,6 +309,8 @@ function MapContent() {
 
     setIsFetchingDirections(true);
     setRouteError(null);
+    setSelectedRouteIndex(null);
+    setIsRoutePanelExpanded(true);
 
     try {
       const response = await fetch("/api/directions", {
@@ -345,6 +374,9 @@ function MapContent() {
         setRoutes([]);
         setSelectedRouteIndex(null);
         setSelectedRestaurant(null);
+        setLightboxRestaurant(null);
+        setIsRoutePanelExpanded(true);
+        setIsDesktopPanelCollapsed(false);
         setRestaurantCache({});
         setSearchCircleCache({});
         setStopResolutionCache({});
@@ -363,6 +395,9 @@ function MapContent() {
       setRoutes(limitedRoutes);
       setSelectedRouteIndex(null);
       setSelectedRestaurant(null);
+      setLightboxRestaurant(null);
+      setIsRoutePanelExpanded(true);
+      setIsDesktopPanelCollapsed(false);
       setRestaurantCache({});
       setSearchCircleCache({});
       setStopResolutionCache({});
@@ -403,10 +438,20 @@ function MapContent() {
       route.legs[route.legs.length - 1]?.end_address?.split(",")[0] ??
       "Destination";
     const originPoint = origin
-      ? { ...origin, name: originName, exempt: "endpoint" as const }
+      ? {
+          ...origin,
+          name: originName,
+          exempt: "endpoint" as const,
+          endpointKind: "origin" as const,
+        }
       : null;
     const destinationPoint = destination
-      ? { ...destination, name: destinationName, exempt: "endpoint" as const }
+      ? {
+          ...destination,
+          name: destinationName,
+          exempt: "endpoint" as const,
+          endpointKind: "destination" as const,
+        }
       : null;
 
     /** Origin → mid-route stops → destination (sidebar groups follow the trip). */
@@ -416,6 +461,8 @@ function MapContent() {
         lng: number;
         name?: string;
         exempt?: "endpoint" | "station";
+        routeShortName?: string;
+        endpointKind?: "origin" | "destination";
       }[],
     ) => [
       ...(originPoint ? [originPoint] : []),
@@ -432,6 +479,11 @@ function MapContent() {
       routeShortName: string;
     };
 
+    const lineMeta = new Map<
+      string,
+      { headsign?: string; vehicleType?: string }
+    >();
+
     const transitSteps: TransitStepInput[] = route.legs
       .flatMap((leg) => leg.steps)
       .filter((step) => isTransitStep(step))
@@ -442,14 +494,21 @@ function MapContent() {
         }
         const dep = transit.departure_stop.location as unknown as { lat: number; lng: number };
         const arr = transit.arrival_stop.location as unknown as { lat: number; lng: number };
+        const routeShortName =
+          transit.line?.short_name ?? transit.line?.name ?? "";
+        if (routeShortName && !lineMeta.has(routeShortName)) {
+          lineMeta.set(routeShortName, {
+            headsign: transit.headsign || undefined,
+            vehicleType: transit.line?.vehicle?.type,
+          });
+        }
         return [
           {
             departureLat: dep.lat,
             departureLng: dep.lng,
             arrivalLat: arr.lat,
             arrivalLng: arr.lng,
-            routeShortName:
-              transit.line?.short_name ?? transit.line?.name ?? "",
+            routeShortName,
           },
         ];
       });
@@ -488,7 +547,7 @@ function MapContent() {
               })),
             );
             console.groupEnd();
-            searchRestaurants(allPoints, routeIndex, "gtfs");
+            searchRestaurants(allPoints, routeIndex, "gtfs", lineMeta);
             return;
           } else {
             console.warn(`[ride-n-dine] Route ${routeIndex} — GTFS returned 0 stops, falling back to polyline sampling`);
@@ -518,7 +577,7 @@ function MapContent() {
         })),
       );
       console.groupEnd();
-      searchRestaurants(allPoints, routeIndex, "sampled");
+      searchRestaurants(allPoints, routeIndex, "sampled", lineMeta);
       return;
     }
 
@@ -530,12 +589,13 @@ function MapContent() {
     });
     const allLastResort = inJourneyOrder(lastResortPoints);
     console.warn(`[ride-n-dine] Route ${routeIndex} — last-resort full polyline sample (${allLastResort.length} points)`);
-    searchRestaurants(allLastResort, routeIndex, "sampled");
+    searchRestaurants(allLastResort, routeIndex, "sampled", lineMeta);
   };
 
   // Handler: User selects a route from the alternatives
   const handleRouteSelect = (routeIndex: number) => {
     setSelectedRouteIndex(routeIndex);
+    setIsRoutePanelExpanded(false);
     // Cache hit: already searched this route, reuse results — no API call
     if (restaurantCache[routeIndex] !== undefined) {
       setRouteError(null);
@@ -546,14 +606,35 @@ function MapContent() {
     setIsSearchingRestaurants(true);
     setRouteError(null);
     const selectedRoute = routes[routeIndex];
+    if (!selectedRoute) return;
     void startRestaurantSearch(selectedRoute, routeIndex);
   };
 
   const searchRestaurants = async (
-    stopPoints: { lat: number; lng: number; name?: string; exempt?: "endpoint" | "station" }[],
+    stopPoints: {
+      lat: number;
+      lng: number;
+      name?: string;
+      exempt?: "endpoint" | "station";
+      routeShortName?: string;
+      headsign?: string;
+      vehicleType?: string;
+      endpointKind?: "origin" | "destination";
+    }[],
     routeIndex: number,
     stopResolution: StopResolution,
+    lineMeta: Map<string, { headsign?: string; vehicleType?: string }>,
   ) => {
+    const decoratedStops = stopPoints.map((sp) => {
+      const meta = sp.routeShortName
+        ? lineMeta.get(sp.routeShortName)
+        : undefined;
+      return {
+        ...sp,
+        headsign: sp.headsign ?? meta?.headsign,
+        vehicleType: sp.vehicleType ?? meta?.vehicleType,
+      };
+    });
     setStopResolutionCache((prev) => ({ ...prev, [routeIndex]: stopResolution }));
     const searchId = ++activeRestaurantSearchIdRef.current;
     const searchStartedAt = Date.now();
@@ -595,10 +676,10 @@ function MapContent() {
       return Math.sqrt(dLat * dLat + dLng * dLng);
     };
 
-    const endpointPoints = stopPoints.filter((s) => s.exempt === "endpoint");
-    const deduped: typeof stopPoints = [];
+    const endpointPoints = decoratedStops.filter((s) => s.exempt === "endpoint");
+    const deduped: typeof decoratedStops = [];
 
-    for (const stop of stopPoints) {
+    for (const stop of decoratedStops) {
       if (stop.exempt === "endpoint") {
         deduped.push(stop);
         continue;
@@ -629,7 +710,7 @@ function MapContent() {
     }
 
     console.group(
-      `[ride-n-dine] Route ${routeIndex} — search circles (${searchPoints.length} of ${stopPoints.length} stops)`,
+      `[ride-n-dine] Route ${routeIndex} — search circles (${searchPoints.length} of ${decoratedStops.length} stops)`,
     );
     console.table(
       searchPoints.map((sp, i) => ({
@@ -644,7 +725,18 @@ function MapContent() {
     const circles: SearchCircle[] = searchPoints.map((sp) => ({
       center: { lat: sp.lat, lng: sp.lng },
       radius: searchRadius,
-      name: sp.name ? formatStopName(sp.name) : undefined,
+      name:
+        sp.endpointKind === "origin"
+          ? "Your start"
+          : sp.endpointKind === "destination"
+            ? "Your destination"
+            : sp.name
+              ? formatStopName(sp.name)
+              : undefined,
+      routeShortName: sp.routeShortName,
+      headsign: sp.headsign,
+      vehicleType: sp.vehicleType,
+      endpointKind: sp.endpointKind,
     }));
     setSearchCircleCache((prev) => ({ ...prev, [routeIndex]: circles }));
 
@@ -693,7 +785,16 @@ function MapContent() {
 
   const processAllResults = (
     results: PlaceSearchResult[],
-    stopPoints: { lat: number; lng: number; name?: string; stopIndex: number; routeShortName?: string }[],
+    stopPoints: {
+      lat: number;
+      lng: number;
+      name?: string;
+      stopIndex: number;
+      routeShortName?: string;
+      headsign?: string;
+      vehicleType?: string;
+      endpointKind?: "origin" | "destination";
+    }[],
     routeIndex: number,
     searchId: number,
     stopResolution: StopResolution,
@@ -758,6 +859,20 @@ function MapContent() {
 
         const distanceFromRoute = Math.round(minDistance);
 
+        const coverPhoto = place.photos?.[0]?.photo_reference;
+
+        const nearestStopName =
+          nearestStop?.endpointKind === "origin"
+            ? "Your start"
+            : nearestStop?.endpointKind === "destination"
+              ? "Your destination"
+              : nearestStop?.name
+                ? formatStopName(nearestStop.name)
+                : stopResolution === "gtfs"
+                  ? formatStopName(`Stop ${(nearestStop?.stopIndex ?? 0) + 1}`)
+                  : "";
+        const nearestStopIndex = nearestStop?.stopIndex ?? 0;
+
         return {
           placeId: place.place_id || "",
           name: place.name || "Unknown Restaurant",
@@ -768,14 +883,21 @@ function MapContent() {
           userRatingsTotal: place.user_ratings_total,
           priceLevel: place.price_level,
           vicinity: place.vicinity,
-          nearestStopName: nearestStop?.name
-            ? formatStopName(nearestStop.name)
-            : stopResolution === "gtfs"
-              ? formatStopName(`Stop ${(nearestStop?.stopIndex ?? 0) + 1}`)
-              : "",
-          nearestStopIndex: nearestStop?.stopIndex ?? 0,
+          nearestStopName,
+          nearestStopIndex,
           detourMinutes: Math.round(distanceFromRoute / 80),
           transitLineName: nearestStop?.routeShortName,
+          transitHeadsign: nearestStop?.headsign,
+          transitVehicleType: nearestStop?.vehicleType,
+          alightHint: formatAlightHint(
+            nearestStopName,
+            nearestStopIndex,
+            stopPoints,
+          ) ?? undefined,
+          photoReference:
+            coverPhoto && isValidPhotoReference(coverPhoto)
+              ? coverPhoto
+              : undefined,
         };
       })
       .filter((restaurant): restaurant is Restaurant => restaurant !== null);
@@ -788,85 +910,242 @@ function MapContent() {
     finishRestaurantSearch(searchId);
   };
 
-  return (
-    <div className="h-screen w-screen flex flex-col bg-app-bg relative overflow-hidden">
-      {/* Map always visible in background */}
-      <div className="absolute inset-0 z-0">
-        <Map
-          centerCoordinate={{ lat: 49.2827, lng: -123.1207 }}
-          zoomLevel={12}
-          mapId={mapId}
-          colorScheme={themeMode === "dark" ? "DARK" : "LIGHT"}
-          directionsResult={directionsResult}
-          routes={routes}
-          selectedRouteIndex={selectedRouteIndex}
-          restaurants={restaurants}
-          searchCircles={searchCircles}
-          stopGroups={stopGroups}
-          selectedStopIndex={selectedStopIndex}
-          onStopClick={setSelectedStopIndex}
-          showBounds={showBounds}
-          selectedRestaurant={selectedRestaurant}
-          onSelectRestaurant={setSelectedRestaurant}
-          onMapClick={() => { setIsBottomSheetExpanded(false); setSelectedRestaurant(null); setSelectedStopIndex(null); }}
-        />
-      </div>
+  const hasTrip = Boolean(originLabel && destinationLabel);
+  const searchOpen = isSearchExpanded || !hasTrip;
+  const routeListOpen =
+    !searchOpen &&
+    routes.length > 0 &&
+    (selectedRouteIndex === null || isRoutePanelExpanded);
+  const restaurantsOpen =
+    !searchOpen &&
+    selectedRouteIndex !== null &&
+    !isRoutePanelExpanded;
+  const desktopPanelOpen = routes.length > 0 && !isDesktopPanelCollapsed;
 
-      {/* Navbar always on top */}
+  const submitSearch = (
+    origin: string | google.maps.Place,
+    destination: string | google.maps.Place,
+    oLabel: string,
+    dLabel: string,
+  ) => {
+    setOriginLabel(oLabel);
+    setDestinationLabel(dLabel);
+    void handleGetDirection(origin, destination);
+    setIsSearchExpanded(false);
+    setIsDesktopPanelCollapsed(false);
+  };
+
+  const openDesktopPanel = () => setIsDesktopPanelCollapsed(false);
+
+  const searchProps = {
+    onSearch: submitSearch,
+    isLoading: isFetchingDirections,
+    searchDisabled:
+      !canSearch || isFetchingDirections || isSearchingRestaurants,
+    searchBlockedMessage:
+      routeError && quota?.remaining !== 0 ? routeError : null,
+    defaultOrigin: originLabel,
+    defaultDestination: destinationLabel,
+    userLocation,
+    quota,
+  };
+
+  return (
+    <div className="flex h-screen w-screen flex-col overflow-hidden bg-app-bg">
       <Navbar themeMode={themeMode} onToggleTheme={toggleTheme} />
 
-      {/* Search box + route panel — always visible top-left */}
-      <div className="absolute top-20 left-4 right-4 z-20 lg:top-20 lg:left-8 lg:right-auto lg:w-md lg:max-w-[90vw] flex flex-col gap-3 lg:max-h-[calc(100vh-6rem)]">
-        <RouteSearch
-          collapsed={
-            !isSearchExpanded &&
-            Boolean(originLabel && destinationLabel)
-          }
-          onExpand={() => setIsSearchExpanded(true)}
-          onSearch={(o, d, oLabel, dLabel) => {
-            setOriginLabel(oLabel);
-            setDestinationLabel(dLabel);
-            void handleGetDirection(o, d);
-            setIsSearchExpanded(false);
-          }}
-          isLoading={isFetchingDirections}
-          searchDisabled={
-            !canSearch || isFetchingDirections || isSearchingRestaurants
-          }
-          searchBlockedMessage={
-            routeError && quota?.remaining !== 0 ? routeError : null
-          }
-          defaultOrigin={originLabel}
-          defaultDestination={destinationLabel}
-          userLocation={userLocation}
-          quota={quota}
-        />
-        {routes.length > 0 && (
-          <div className="hidden lg:block flex-1 min-h-0">
-            <RouteSelectionPanel
-              routes={routes}
-              selectedRouteIndex={selectedRouteIndex}
-              onRouteSelect={handleRouteSelect}
-            />
-          </div>
-        )}
-      </div>
+      <div className="relative min-h-0 flex-1">
+        <div className="absolute inset-0">
+          <RouteMap
+            centerCoordinate={{ lat: 49.2827, lng: -123.1207 }}
+            zoomLevel={12}
+            mapId={mapId}
+            colorScheme={themeMode === "dark" ? "DARK" : "LIGHT"}
+            directionsResult={directionsResult}
+            routes={routes}
+            selectedRouteIndex={selectedRouteIndex}
+            restaurants={restaurants}
+            searchCircles={searchCircles}
+            stopGroups={stopGroups}
+            selectedStopIndex={selectedStopIndex}
+            onStopClick={setSelectedStopIndex}
+            showBounds={showBounds}
+            selectedRestaurant={selectedRestaurant}
+            hoveredRestaurant={hoveredRestaurant}
+            onSelectRestaurant={setSelectedRestaurant}
+            onOpenPhotos={setLightboxRestaurant}
+            desktopOverlay={desktopPanelOpen ? "panel" : "none"}
+            onMapClick={() => {
+              setIsBottomSheetExpanded(false);
+              setSelectedRestaurant(null);
+              setHoveredRestaurant(null);
+              setSelectedStopIndex(null);
+            }}
+          />
+        </div>
 
-      {/* Restaurant sidebar (desktop right rail) + mobile bottom sheet */}
-      <>
-        <RestaurantSidebar
-          variant="desktop"
-          restaurants={restaurants}
-          stopGroups={stopGroups}
-          stopResolution={stopResolution}
-          selectedStopIndex={selectedStopIndex}
-          onStopClick={setSelectedStopIndex}
-          isSearching={isSearchingRestaurants && selectedRouteIndex !== null}
-          onRestaurantClick={setSelectedRestaurant}
-        />
+        <div className="pointer-events-none absolute inset-0 z-20 hidden lg:block">
+          {routes.length === 0 && (
+            <div className="pointer-events-auto absolute left-4 top-4 w-[min(24rem,calc(100%-2rem))]">
+              <RouteSearch {...searchProps} />
+            </div>
+          )}
 
-        {/* Mobile bottom sheet flow: routes -> restaurants */}
-        {(() => {
+          {routes.length > 0 && (
+            <>
+              <aside
+                className={`absolute inset-y-0 left-0 flex w-[min(28rem,30vw)] min-w-[22rem] flex-col border-r border-border bg-card-bg transition-transform duration-300 ease-out ${
+                  isDesktopPanelCollapsed
+                    ? "pointer-events-none -translate-x-full"
+                    : "pointer-events-auto translate-x-0"
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => setIsDesktopPanelCollapsed(true)}
+                  className="absolute top-1/2 -right-3 z-10 flex h-8 w-6 -translate-y-1/2 items-center justify-center rounded-r-md border border-l-0 border-border bg-card-bg text-text-secondary shadow-md hover:text-text-primary"
+                  aria-label="Hide panel"
+                >
+                  <svg
+                    className="h-4 w-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M15 19l-7-7 7-7"
+                    />
+                  </svg>
+                </button>
+                {!restaurantsOpen && (
+                  <div className="shrink-0">
+                    <RouteSearch
+                      embedded
+                      collapsed={
+                        !isSearchExpanded &&
+                        Boolean(originLabel && destinationLabel)
+                      }
+                      onExpand={() => setIsSearchExpanded(true)}
+                      {...searchProps}
+                    />
+                  </div>
+                )}
+                {routeListOpen && (
+                  <div className="flex min-h-0 flex-1 flex-col">
+                    <RouteSelectionPanel
+                      embedded
+                      routes={routes}
+                      selectedRouteIndex={selectedRouteIndex}
+                      onRouteSelect={handleRouteSelect}
+                    />
+                  </div>
+                )}
+                {restaurantsOpen && selectedRouteIndex !== null && (
+                  <>
+                    <TripContextBar
+                      originLabel={originLabel}
+                      destinationLabel={destinationLabel}
+                      routeHeadline={getRouteHeadline(routes[selectedRouteIndex])}
+                      duration={
+                        routes[selectedRouteIndex].legs[0]?.duration?.text
+                      }
+                      onEditTrip={() => setIsSearchExpanded(true)}
+                      onEditRoute={() => setIsRoutePanelExpanded(true)}
+                    />
+                    <RestaurantSidebar
+                      variant="desktop"
+                      restaurants={restaurants}
+                      stopGroups={stopGroups}
+                      stopResolution={stopResolution}
+                      selectedStopIndex={selectedStopIndex}
+                      onStopClick={setSelectedStopIndex}
+                      isSearching={
+                        isSearchingRestaurants && selectedRouteIndex !== null
+                      }
+                      onRestaurantClick={setSelectedRestaurant}
+                      onRestaurantHover={setHoveredRestaurant}
+                      onPhotoClick={setLightboxRestaurant}
+                    />
+                  </>
+                )}
+              </aside>
+
+              {isDesktopPanelCollapsed && (
+                <>
+                  <div className="pointer-events-auto absolute left-4 top-4 w-[min(24rem,calc(100%-2rem))]">
+                    {restaurantsOpen && selectedRouteIndex !== null ? (
+                      <TripContextBar
+                        floating
+                        originLabel={originLabel}
+                        destinationLabel={destinationLabel}
+                        routeHeadline={getRouteHeadline(routes[selectedRouteIndex])}
+                        duration={
+                          routes[selectedRouteIndex].legs[0]?.duration?.text
+                        }
+                        onEditTrip={() => {
+                          setIsSearchExpanded(true);
+                          openDesktopPanel();
+                        }}
+                        onEditRoute={() => {
+                          setIsRoutePanelExpanded(true);
+                          openDesktopPanel();
+                        }}
+                      />
+                    ) : (
+                      <div className="overflow-hidden rounded-lg border border-border bg-card-bg shadow-lg">
+                        <RouteSearch
+                          embedded
+                          collapsed={!isSearchExpanded && hasTrip}
+                          onExpand={() => {
+                            setIsSearchExpanded(true);
+                            openDesktopPanel();
+                          }}
+                          {...searchProps}
+                        />
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={openDesktopPanel}
+                    className="pointer-events-auto absolute top-1/2 left-0 z-10 flex h-8 w-6 -translate-y-1/2 items-center justify-center rounded-r-md border border-l-0 border-border bg-card-bg text-text-secondary shadow-md hover:text-text-primary"
+                    aria-label="Show panel"
+                  >
+                    <svg
+                      className="h-4 w-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 5l7 7-7 7"
+                      />
+                    </svg>
+                  </button>
+                </>
+              )}
+            </>
+          )}
+        </div>
+
+        <div className="absolute left-4 right-4 top-4 z-20 lg:hidden">
+          <RouteSearch
+            collapsed={
+              !isSearchExpanded && Boolean(originLabel && destinationLabel)
+            }
+            onExpand={() => setIsSearchExpanded(true)}
+            {...searchProps}
+          />
+        </div>
+
+          {/* Mobile bottom sheet: routes then restaurants */}
+          {(() => {
             const phase =
               selectedRouteIndex !== null
                 ? "restaurants"
@@ -945,12 +1224,21 @@ function MapContent() {
                         setSelectedRestaurant(restaurant);
                         setIsBottomSheetExpanded(false);
                       }}
+                      onPhotoClick={setLightboxRestaurant}
                     />
                   )}
               </BottomSheet>
             );
           })()}
-      </>
+      </div>
+
+      {lightboxRestaurant && (
+        <PhotoLightbox
+          key={lightboxRestaurant.placeId}
+          restaurant={lightboxRestaurant}
+          onClose={() => setLightboxRestaurant(null)}
+        />
+      )}
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useCustomPlacesAutocomplete } from "@/hooks/useCustomPlacesAutocomplete";
 import type { AutocompletePrediction } from "@/hooks/useCustomPlacesAutocomplete";
+import TripEndpoints from "./TripEndpoints";
 
 import type { QuotaResult } from "@/lib/rate-limit/types";
 
@@ -31,6 +32,14 @@ function waypointFromField(
   return input;
 }
 
+function SearchPurposeHeading() {
+  return (
+    <p className="pl-2 text-sm font-normal leading-snug text-text-secondary">
+      Find restaurants along your transit route
+    </p>
+  );
+}
+
 interface RouteSearchProps {
   onSearch: (
     origin: string | google.maps.Place,
@@ -47,6 +56,8 @@ interface RouteSearchProps {
   collapsed?: boolean;
   onExpand?: () => void;
   quota?: QuotaResult | null;
+  /** Flush section inside the desktop overlay panel (no floating card chrome). */
+  embedded?: boolean;
 }
 
 // Defined outside RouteSearch so React doesn't create a new component type on every render.
@@ -85,7 +96,7 @@ function PredictionList({
           }}
           onMouseEnter={() => onHover(0)}
           onMouseLeave={onLeave}
-          className={`px-4 py-2.5 text-sm cursor-pointer transition-colors flex items-center gap-2.5 ${
+          className={`px-3 py-2 text-sm cursor-pointer transition-colors flex items-center gap-2.5 ${
             activeIndex === 0
               ? "bg-accent-soft text-text-primary"
               : "text-text-secondary hover:bg-accent-soft/60"
@@ -110,7 +121,7 @@ function PredictionList({
             }}
             onMouseEnter={() => onHover(listIndex)}
             onMouseLeave={onLeave}
-            className={`px-4 py-2 text-sm cursor-pointer transition-colors ${
+            className={`px-3 py-2 text-sm cursor-pointer transition-colors ${
               activeIndex === listIndex
                 ? "bg-accent-soft text-text-primary"
                 : "text-text-secondary hover:bg-accent-soft/60"
@@ -152,6 +163,7 @@ export default function RouteSearch({
   collapsed = false,
   onExpand,
   quota = null,
+  embedded = false,
 }: RouteSearchProps) {
   const skipNextAutoSearchRef = useRef(false);
   // After the first completed search, editing O/D must use Search / Enter.
@@ -180,13 +192,6 @@ export default function RouteSearch({
     "origin" | "destination" | null
   >(null);
 
-  // "dest-only": single "Where to?" box.
-  // "both": full origin + destination form.
-  // Start in "both" if a previous search already set the origin label.
-  const [phase, setPhase] = useState<"dest-only" | "both">(
-    defaultOrigin ? "both" : "dest-only",
-  );
-
   const originAC = useCustomPlacesAutocomplete({
     initialInput: defaultOrigin,
     userLocation,
@@ -196,12 +201,20 @@ export default function RouteSearch({
     userLocation,
   });
 
+  // When GPS arrives and origin is still empty, default to current location.
+  useEffect(() => {
+    if (!userLocation) return;
+    if (originAC.input.trim()) return;
+    skipNextAutoSearchRef.current = true;
+    originAC.setInput(CURRENT_LOCATION_LABEL);
+    originAC.setSelectedPrediction(CURRENT_LOCATION_PREDICTION);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userLocation]);
 
   // When the parent re-provides an origin label (e.g. after a search completed),
-  // switch to the full form and sync the input so the field isn't empty on expand.
+  // sync the input so the field isn't empty on expand.
   useEffect(() => {
     if (!defaultOrigin) return;
-    setPhase("both");
     originAC.setInput(defaultOrigin);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [defaultOrigin]);
@@ -212,47 +225,12 @@ export default function RouteSearch({
     }
   }, [defaultOrigin, defaultDestination]);
 
-  // Focus the destination input programmatically rather than using autoFocus.
-  // autoFocus fires the native DOM focus before React's handlers are attached
-  // (SSR hydration timing), so onFocus never fires and focusedField stays null.
-  // A useEffect focus call happens post-hydration with handlers ready.
-  useEffect(() => {
-    if (!collapsed && phase === "dest-only") {
-      const t = setTimeout(() => destInputRef.current?.focus(), 50);
-      return () => clearTimeout(t);
-    }
-  }, [collapsed, phase]);
-
   // ── Shared helper ────────────────────────────────────────────────────────────
 
-  /**
-   * Called after the destination is confirmed while in dest-only mode.
-   * If we have a location: auto-search immediately with "Current Location".
-   * If we don't: reveal the origin field so the user can type it.
-   */
-  const proceedFromDest = (
-    dest: string | google.maps.Place,
-    destLabel: string,
-  ) => {
-    if (!dest) return;
-    if (userLocation) {
-      if (!searchDisabled)
-        onSearch("Current Location", dest, "Current Location", destLabel);
-    } else {
-      // No location — reveal origin field and let user fill it in.
-      originAC.setInput("");
-      originAC.setSelectedPrediction(null);
-      setPhase("both");
-      setTimeout(() => originInputRef.current?.focus(), 60);
-    }
-  };
-
-  // ── Auto-search effects ───────────────────────────────────────────────────────
 
   // "both" mode: auto-search only before the first completed search.
   // After that, user must press Search / Enter (avoids quota waste while editing).
   useEffect(() => {
-    if (phase !== "both") return;
     if (requireExplicitSearchRef.current) return;
     if (skipNextAutoSearchRef.current) {
       skipNextAutoSearchRef.current = false;
@@ -276,19 +254,6 @@ export default function RouteSearch({
     onSearch(origin, destination, originAC.input, destAC.input);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [originAC.selectedPrediction, destAC.selectedPrediction]);
-
-  // "dest-only" mode: fire when user picks from autocomplete (first-search flow).
-  useEffect(() => {
-    if (phase !== "dest-only") return;
-    if (requireExplicitSearchRef.current) return;
-    if (!destAC.selectedPrediction) return;
-    const dest = waypointFromField(
-      destAC.selectedPrediction,
-      destAC.input,
-    );
-    proceedFromDest(dest, destAC.input);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [destAC.selectedPrediction]);
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
 
@@ -332,13 +297,6 @@ export default function RouteSearch({
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (phase === "dest-only") {
-      proceedFromDest(
-        waypointFromField(destAC.selectedPrediction, destAC.input),
-        destAC.input,
-      );
-      return;
-    }
     const o = waypointFromField(originAC.selectedPrediction, originAC.input);
     const d = waypointFromField(destAC.selectedPrediction, destAC.input);
     if (o && d && !searchDisabled) onSearch(o, d, originAC.input, destAC.input);
@@ -480,14 +438,7 @@ export default function RouteSearch({
         }
         return;
       }
-      if (phase === "dest-only") {
-        e.preventDefault();
-        proceedFromDest(
-          waypointFromField(destAC.selectedPrediction, destAC.input),
-          destAC.input,
-        );
-      }
-      // both mode: do not preventDefault → form onSubmit runs (desktop Enter / mobile Search)
+      // No highlighted suggestion → form onSubmit runs (desktop Enter / mobile Search)
       return;
     }
     if (e.key === "Escape") destAC.setActiveIndex(null);
@@ -521,17 +472,27 @@ export default function RouteSearch({
   const limitReached = quota !== null && quota.remaining === 0;
 
   return (
-    <div className="bg-card-bg rounded-lg shadow-lg flex flex-col border border-border">
+    <div
+      className={`flex flex-col bg-card-bg ${
+        embedded
+          ? collapsed
+            ? "border-b border-border"
+            : ""
+          : "rounded-lg border border-border shadow-lg"
+      }`}
+    >
       {collapsed ? (
         /* ── Collapsed pill ─────────────────────────────────── */
         <button
           type="button"
           onClick={onExpand}
-          className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-accent-soft/40 transition-colors text-left rounded-t-lg"
+          className={`flex w-full items-center gap-2 px-3 py-1.5 text-left transition-colors hover:bg-accent-soft ${
+            embedded ? "" : "rounded-t-lg"
+          }`}
           aria-label="Edit search"
         >
           <svg
-            className="w-4 h-4 text-text-muted shrink-0"
+            className="h-4 w-4 shrink-0 text-text-muted"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -543,17 +504,12 @@ export default function RouteSearch({
               d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
             />
           </svg>
-          <span className="text-text-primary text-sm flex-1 flex items-center gap-0 min-w-0">
-            <span className="text-text-muted truncate min-w-0 max-w-[40%]">
-              {originDisplayLabel || "Origin"}
-            </span>
-            <span className="text-text-muted mx-1.5 shrink-0">→</span>
-            <span className="truncate min-w-0 max-w-[40%]">
-              {defaultDestination || "Destination"}
-            </span>
-          </span>
+          <TripEndpoints
+            origin={originDisplayLabel || "Origin"}
+            destination={defaultDestination || "Destination"}
+          />
           <svg
-            className="w-3.5 h-3.5 text-text-muted shrink-0"
+            className="h-3.5 w-3.5 shrink-0 text-text-muted"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -566,191 +522,16 @@ export default function RouteSearch({
             />
           </svg>
         </button>
-      ) : phase === "dest-only" ? (
-        /* ── Dest-only: single "Where to?" input ───────────── */
-        <form
-          className="p-2.5 sm:p-4 flex flex-col gap-2"
-          onSubmit={handleSubmit}
-        >
-          {userLocation ? (
-            /* ── Has GPS: show locked "Current location" origin + dest ── */
-            <div className="flex gap-3">
-              {/* Route line indicator */}
-              <div className="flex flex-col items-center py-2.5 shrink-0 w-4">
-                <div className="w-2.5 h-2.5 rounded-full border-2 border-text-secondary shrink-0" />
-                <div className="w-px flex-1 bg-border my-1.5" />
-                <div className="w-3 h-3 bg-text-primary rotate-45 rounded-sm shrink-0" />
-              </div>
-
-              <div className="flex-1 flex flex-col gap-2">
-                {/* Origin — read-only "Current location" chip */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    originAC.setInput("Current Location");
-                    setPhase("both");
-                    setTimeout(() => originInputRef.current?.focus(), 60);
-                  }}
-                  className="w-full text-left pl-3 pr-3 py-2 sm:py-2.5 border border-border rounded-md bg-app-bg/60 text-text-secondary text-sm flex items-center gap-1.5 hover:bg-app-bg hover:border-text-muted transition-colors group"
-                  title="Click to change starting point"
-                >
-                  <svg className="w-3 h-3 shrink-0 text-primary" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
-                  </svg>
-                  <span className="flex-1 truncate">Current location</span>
-                  <svg className="w-3 h-3 shrink-0 opacity-0 group-hover:opacity-40 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2.414a2 2 0 01.586-1.414z" />
-                  </svg>
-                </button>
-
-                {/* Destination */}
-                <div className="relative">
-                  <input
-                    ref={destInputRef}
-                    type="text"
-                    autoComplete="off"
-                    enterKeyHint="search"
-                    placeholder="Where to?"
-                    value={destAC.input}
-                    onChange={handleDestChange}
-                    onFocus={() => setFocusedField("destination")}
-                    onBlur={() => setFocusedField(null)}
-                    onKeyDown={handleDestKeyDown}
-                    className={`w-full pl-4 py-2 sm:py-2.5 border border-border rounded-md
-                      bg-app-bg text-text-primary placeholder:text-text-muted
-                      focus:outline-none focus:ring-2 focus:ring-accent-ring/70
-                      ${destAC.input ? "pr-14" : "pr-9"}`}
-                  />
-                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
-                    {destAC.input && (
-                      <button
-                        type="button"
-                        onMouseDown={(e) => { e.preventDefault(); handleClearDest(); }}
-                        className="p-1 text-text-muted hover:text-text-primary transition-colors"
-                        aria-label="Clear destination"
-                      >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    )}
-                    <button
-                      type="submit"
-                      className="p-1 text-text-muted hover:text-text-primary transition-colors"
-                      aria-label="Search"
-                    >
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                      </svg>
-                    </button>
-                  </div>
-                  <AnimatePresence>
-                    {showDestDropdown && (
-                      <PredictionList
-                        predictions={destAC.predictions}
-                        activeIndex={destAC.activeIndex}
-                        onSelect={selectDestPrediction}
-                        onHover={(i) => destAC.setActiveIndex(i)}
-                        onLeave={() => destAC.setActiveIndex(null)}
-                        showCurrentLocation={destShowsCurrentLocation}
-                        onSelectCurrentLocation={selectCurrentLocationDest}
-                      />
-                    )}
-                  </AnimatePresence>
-                </div>
-              </div>
-            </div>
-          ) : (
-            /* ── No GPS: single "Where to?" with manual origin option ── */
-            <>
-              <div className="flex gap-3 items-center">
-                {/* Destination diamond icon */}
-                <div className="flex items-center justify-center shrink-0 w-4">
-                  <div className="w-3 h-3 bg-text-primary rotate-45 rounded-sm" />
-                </div>
-
-                <div className="relative flex-1">
-                  <input
-                    ref={destInputRef}
-                    type="text"
-                    autoComplete="off"
-                    enterKeyHint="search"
-                    placeholder="Where to?"
-                    value={destAC.input}
-                    onChange={handleDestChange}
-                    onFocus={() => setFocusedField("destination")}
-                    onBlur={() => setFocusedField(null)}
-                    onKeyDown={handleDestKeyDown}
-                    className={`w-full pl-4 py-2 sm:py-2.5 border border-border rounded-md
-                      bg-app-bg text-text-primary placeholder:text-text-muted
-                      focus:outline-none focus:ring-2 focus:ring-accent-ring/70
-                      ${destAC.input ? "pr-14" : "pr-9"}`}
-                  />
-                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
-                    {destAC.input && (
-                      <button
-                        type="button"
-                        onMouseDown={(e) => { e.preventDefault(); handleClearDest(); }}
-                        className="p-1 text-text-muted hover:text-text-primary transition-colors"
-                        aria-label="Clear destination"
-                      >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    )}
-                    <button
-                      type="submit"
-                      className="p-1 text-text-muted hover:text-text-primary transition-colors"
-                      aria-label="Search"
-                    >
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                      </svg>
-                    </button>
-                  </div>
-                  <AnimatePresence>
-                    {showDestDropdown && (
-                      <PredictionList
-                        predictions={destAC.predictions}
-                        activeIndex={destAC.activeIndex}
-                        onSelect={selectDestPrediction}
-                        onHover={(i) => destAC.setActiveIndex(i)}
-                        onLeave={() => destAC.setActiveIndex(null)}
-                        showCurrentLocation={destShowsCurrentLocation}
-                        onSelectCurrentLocation={selectCurrentLocationDest}
-                      />
-                    )}
-                  </AnimatePresence>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setPhase("both")}
-                className="pl-7 text-xs text-text-muted hover:text-text-primary transition-colors text-left"
-              >
-                + Add starting point manually
-              </button>
-            </>
-          )}
-
-          {searchBlockedMessage && (
-            <p className="text-amber-300 text-xs px-1">{searchBlockedMessage}</p>
-          )}
-          {isLoading && (
-            <p className="text-text-muted text-xs px-1">Loading maps...</p>
-          )}
-        </form>
       ) : (
         /* ── Both fields: origin + destination ─────────────── */
         <form
-          className="p-2.5 sm:p-4 flex flex-col gap-2 sm:gap-3"
+          className="px-3 py-2.5 flex flex-col gap-2"
           onSubmit={handleSubmit}
         >
+          <SearchPurposeHeading />
           <div className="flex gap-3">
             {/* Route line indicator */}
-            <div className="flex flex-col items-center py-3 shrink-0 w-4">
+            <div className="flex flex-col items-center py-1.5 shrink-0 w-4">
               <div className="w-2.5 h-2.5 rounded-full border-2 border-text-secondary shrink-0" />
               <div className="w-px flex-1 bg-border my-2" />
               <div className="w-3 h-3 bg-text-primary rotate-45 rounded-sm shrink-0" />
@@ -772,7 +553,7 @@ export default function RouteSearch({
                     onFocus={() => setFocusedField("origin")}
                     onBlur={() => setFocusedField(null)}
                     onKeyDown={handleOriginKeyDown}
-                    className={`w-full pl-4 py-2 sm:py-2.5 border border-border rounded-md
+                    className={`w-full pl-3 py-1.5 text-sm border border-border rounded-md
                       bg-app-bg text-text-primary placeholder:text-text-muted
                       focus:outline-none focus:ring-2 focus:ring-accent-ring/70
                       ${originAC.input ? "pr-8" : "pr-4"}`}
@@ -818,7 +599,7 @@ export default function RouteSearch({
                     onFocus={() => setFocusedField("destination")}
                     onBlur={() => setFocusedField(null)}
                     onKeyDown={handleDestKeyDown}
-                    className={`w-full pl-4 py-2 sm:py-2.5 border border-border rounded-md
+                    className={`w-full pl-3 py-1.5 text-sm border border-border rounded-md
                       bg-app-bg text-text-primary placeholder:text-text-muted
                       focus:outline-none focus:ring-2 focus:ring-accent-ring/70
                       ${destAC.input ? "pr-8" : "pr-4"}`}
@@ -852,13 +633,13 @@ export default function RouteSearch({
               </div>
 
               {/* Swap + search on the right */}
-              <div className="absolute right-0 top-1/2 z-20 flex -translate-y-1/2 flex-col gap-3">
+              <div className="absolute right-0 top-1/2 z-20 flex -translate-y-1/2 flex-col gap-2">
                 <button
                   type="button"
                   onClick={handleSwap}
                   title="Swap origin and destination"
                   aria-label="Swap origin and destination"
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-card-bg/90 text-text-muted transition-colors hover:border-text-muted hover:text-text-primary"
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border bg-card-bg/90 text-text-muted transition-colors hover:border-text-muted hover:text-text-primary"
                 >
                   <svg
                     className="h-4 w-4 rotate-90"
@@ -880,7 +661,7 @@ export default function RouteSearch({
                   disabled={!canSubmitBoth}
                   title="Search route"
                   aria-label="Search route"
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-fg shadow-sm transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-40"
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-primary text-primary-fg shadow-sm transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <svg
                     className="h-4 w-4"
@@ -911,7 +692,7 @@ export default function RouteSearch({
       )}
 
       {quota !== null && (
-        <div className="flex items-center justify-between gap-3 border-t border-border px-3 py-2">
+        <div className="flex items-center justify-between gap-3 border-t border-border px-3 py-1.5">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="flex gap-0.5 shrink-0">
               {Array.from({ length: quota.limit }).map((_, i) => (
