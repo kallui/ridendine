@@ -5,9 +5,7 @@
 
 **Your transit route has better food than you think.**
 
-Discover restaurants along your public transit route.
-
-<img width="1876" height="890" alt="image" src="https://github.com/user-attachments/assets/b746aef4-5590-4fe8-9833-b4cb11c5b1d3" />
+Find restaurants along your public transit route.
 
 ## The problem
 
@@ -23,12 +21,6 @@ Google & Apple Maps make it easy for drivers to discover food along their route,
 2. **Pick your route** — Choose the transit option that works best for you.
 3. **Explore food options along the way** — RideNDine finds restaurants within a ~5-minute walk of your transit path. Search by restaurant name, and tap a restaurant or map marker to see which line to take and where to get off. Tap a photo thumbnail to see more photos.
 4. **Open in your maps app** — Found somewhere you like? Open it directly in your preferred maps app for walking directions and navigation.
-
-### Screenshots
-<img width="1873" height="893" alt="image" src="https://github.com/user-attachments/assets/11bd12f6-1c41-41e5-935a-49a7698d085a" />
-
-<img width="374" height="823" alt="image" src="https://github.com/user-attachments/assets/df8112e8-f4d6-4219-b73d-4cb17cd34321" />
-
 
 ## App coverage
 
@@ -53,19 +45,6 @@ Elsewhere, RideNDine still works by sampling your transit path at regular interv
 ## Usage limits
 
 To help keep the app sustainable as a personal project, RideNDine currently allows up to **5 route searches** within any rolling 24-hour period.
-
----
-
-## Tech stack
-
-| Layer      | Technology                                  |
-| ---------- | ------------------------------------------- |
-| Framework  | Next.js 15 (App Router)                     |
-| Language   | TypeScript                                  |
-| Styling    | Tailwind CSS v4                             |
-| Maps       | Google Maps via `@vis.gl/react-google-maps` |
-| Geospatial | Turf.js (`@turf/turf`)                      |
-| PWA        | `next-pwa`                                  |
 
 ## To run locally:
 
