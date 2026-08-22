@@ -13,15 +13,15 @@ Discover restaurants along your public transit route.
 
 RideNDine started from my own transit journey.
 
-When I started a new job in a different city, I found myself spending hours on public transit every day without knowing what food options were available along my route. After work, I would often want to grab dinner on the way home, but finding places that fit naturally into my trip meant searching for restaurants around different stops and figuring out which ones were actually convenient to reach.
+When I started a new job in a different city, I found myself spending hours on public transit every day. After work, I often wanted to grab dinner on the way home, but finding restaurants that were actually convenient along my route meant checking stops and nearby restaurants one by one.
 
-Google Maps already makes it easy for drivers to find restaurants along their route. For public transit riders, finding food stops that fit conveniently into their trip often requires checking stops and nearby restaurants one by one. I built RideNDine to make those discoveries easier.
+Google & Apple Maps make it easy for drivers to discover food along their route, but I found there wasn't the same experience for public transit. So, I built RideNDine to make finding food along your transit journey easier.
 
 ## How it works
 
 1. **Enter your route** — Enter your starting point and destination to plan your trip.
 2. **Pick your route** — Choose the transit option that works best for you.
-3. **Explore food options along the way** — RideNDine finds restaurants within a ~5-minute walk of your transit path. Search by restaurant name, and tap the restaurant cards or markers on the map for details.
+3. **Explore food options along the way** — RideNDine finds restaurants within a ~5-minute walk of your transit path. Search by restaurant name, and tap a restaurant or map marker to see which line to take and where to get off. Tap a photo thumbnail to see more photos.
 4. **Open in your maps app** — Found somewhere you like? Open it directly in your preferred maps app for walking directions and navigation.
 
 ### Screenshots
@@ -32,11 +32,23 @@ Google Maps already makes it easy for drivers to find restaurants along their ro
 
 ## App coverage
 
-In registered metro regions, RideNDine uses public GTFS feeds to search at real bus stops and train stations along your route, so nearby restaurants are linked to real stops on your trip.
+In these cities, RideNDine uses official GTFS data to search at real bus stops and train stations along your route, so nearby restaurants are linked to real stops on your trip.
 
-See [`docs/COVERED_CITIES.md`](docs/COVERED_CITIES.md) for which municipalities each feed covers (one feed often spans many cities — e.g. TransLink across Metro Vancouver). Runtime feed URLs and bounds live in `src/lib/gtfs-feeds.ts`. Smoke-test feeds locally before treating them as production-ready.
+| City      | Country       | Transit data          |
+| --------- | ------------- | --------------------- |
+| Vancouver | Canada        | TransLink             |
+| Toronto   | Canada        | TTC + GO Transit      |
+| Montréal  | Canada        | STM + REM             |
+| Seattle   | United States | Sound Transit + Metro |
+| Portland  | United States | TriMet                |
+| Chicago   | United States | CTA + Pace            |
+| Boston    | United States | MBTA                  |
+| Denver    | United States | RTD                   |
+| Austin    | United States | CapMetro              |
 
 Elsewhere, RideNDine still works by sampling your transit path at regular intervals to find nearby restaurants. Results are less stop-specific, but discovery along your route still works.
+
+**Support for more transit systems is planned.** See [`docs/COVERED_CITIES.md`](docs/COVERED_CITIES.md) for which municipalities each feed covers.
 
 ## Usage limits
 

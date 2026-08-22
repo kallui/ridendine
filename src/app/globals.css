@@ -20,6 +20,8 @@
   --accent: #e4e4e7;
   --accent-ring: #a1a1aa;
   --accent-soft: #ececee;
+  --restaurant: #d13a3a;
+  --restaurant-emphasis: #b32626;
 }
 
 :root[data-theme="dark"] {
@@ -37,6 +39,8 @@
   --accent: #3f3f46;
   --accent-ring: #52525b;
   --accent-soft: #27272a;
+  --restaurant: #d13a3a;
+  --restaurant-emphasis: #b32626;
 }
 
 @theme inline {
@@ -54,6 +58,8 @@
   --color-text-primary: var(--text-primary);
   --color-text-secondary: var(--text-secondary);
   --color-text-muted: var(--text-muted);
+  --color-restaurant: var(--restaurant);
+  --color-restaurant-emphasis: var(--restaurant-emphasis);
 
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
@@ -75,6 +81,8 @@
     --accent: #3f3f46;
     --accent-ring: #52525b;
     --accent-soft: #27272a;
+    --restaurant: #d13a3a;
+    --restaurant-emphasis: #b32626;
   }
 }
 
@@ -235,6 +243,10 @@ body {
   margin-top: 0;
 }
 
+.mdx-content h1 + h2 {
+  margin-top: 1.25rem;
+}
+
 .mdx-content p {
   color: var(--text-secondary);
   line-height: 1.7;
@@ -275,6 +287,41 @@ body {
   color: var(--text-secondary);
   font-size: 0.75rem;
   font-weight: 600;
+}
+
+.mdx-content ul {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.mdx-content ul li {
+  position: relative;
+  padding-left: 1.15rem;
+  color: var(--text-secondary);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+
+.mdx-content ul li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.55em;
+  width: 0.35rem;
+  height: 0.35rem;
+  border-radius: 9999px;
+  background: var(--text-muted);
+}
+
+.mdx-content .mdx-update-date {
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  margin-top: -0.35rem;
+  margin-bottom: 0.75rem;
 }
 
 .mdx-content li strong,

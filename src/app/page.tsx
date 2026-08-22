@@ -1002,12 +1002,18 @@ function MapContent() {
               >
                 <button
                   type="button"
-                  onClick={() => setIsDesktopPanelCollapsed(true)}
-                  className="absolute top-1/2 -right-3 z-10 flex h-8 w-6 -translate-y-1/2 items-center justify-center rounded-r-md border border-l-0 border-border bg-card-bg text-text-secondary shadow-md hover:text-text-primary"
-                  aria-label="Hide panel"
+                  onClick={() =>
+                    setIsDesktopPanelCollapsed((collapsed) => !collapsed)
+                  }
+                  className="pointer-events-auto absolute top-1/2 left-full z-10 flex h-8 w-6 -translate-y-1/2 -ml-px items-center justify-center rounded-r-md border border-l-0 border-border bg-card-bg text-text-secondary shadow-md hover:text-text-primary"
+                  aria-label={
+                    isDesktopPanelCollapsed ? "Show panel" : "Hide panel"
+                  }
                 >
                   <svg
-                    className="h-4 w-4"
+                    className={`h-4 w-4 transition-transform duration-300 ease-out ${
+                      isDesktopPanelCollapsed ? "rotate-180" : ""
+                    }`}
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -1074,61 +1080,39 @@ function MapContent() {
               </aside>
 
               {isDesktopPanelCollapsed && (
-                <>
-                  <div className="pointer-events-auto absolute left-4 top-4 w-[min(24rem,calc(100%-2rem))]">
-                    {restaurantsOpen && selectedRouteIndex !== null ? (
-                      <TripContextBar
-                        floating
-                        originLabel={originLabel}
-                        destinationLabel={destinationLabel}
-                        routeHeadline={getRouteHeadline(routes[selectedRouteIndex])}
-                        duration={
-                          routes[selectedRouteIndex].legs[0]?.duration?.text
-                        }
-                        onEditTrip={() => {
+                <div className="pointer-events-auto absolute left-4 top-4 w-[min(24rem,calc(100%-2rem))]">
+                  {restaurantsOpen && selectedRouteIndex !== null ? (
+                    <TripContextBar
+                      floating
+                      originLabel={originLabel}
+                      destinationLabel={destinationLabel}
+                      routeHeadline={getRouteHeadline(routes[selectedRouteIndex])}
+                      duration={
+                        routes[selectedRouteIndex].legs[0]?.duration?.text
+                      }
+                      onEditTrip={() => {
+                        setIsSearchExpanded(true);
+                        openDesktopPanel();
+                      }}
+                      onEditRoute={() => {
+                        setIsRoutePanelExpanded(true);
+                        openDesktopPanel();
+                      }}
+                    />
+                  ) : (
+                    <div className="overflow-hidden rounded-lg border border-border bg-card-bg shadow-lg">
+                      <RouteSearch
+                        embedded
+                        collapsed={!isSearchExpanded && hasTrip}
+                        onExpand={() => {
                           setIsSearchExpanded(true);
                           openDesktopPanel();
                         }}
-                        onEditRoute={() => {
-                          setIsRoutePanelExpanded(true);
-                          openDesktopPanel();
-                        }}
+                        {...searchProps}
                       />
-                    ) : (
-                      <div className="overflow-hidden rounded-lg border border-border bg-card-bg shadow-lg">
-                        <RouteSearch
-                          embedded
-                          collapsed={!isSearchExpanded && hasTrip}
-                          onExpand={() => {
-                            setIsSearchExpanded(true);
-                            openDesktopPanel();
-                          }}
-                          {...searchProps}
-                        />
-                      </div>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={openDesktopPanel}
-                    className="pointer-events-auto absolute top-1/2 left-0 z-10 flex h-8 w-6 -translate-y-1/2 items-center justify-center rounded-r-md border border-l-0 border-border bg-card-bg text-text-secondary shadow-md hover:text-text-primary"
-                    aria-label="Show panel"
-                  >
-                    <svg
-                      className="h-4 w-4"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 5l7 7-7 7"
-                      />
-                    </svg>
-                  </button>
-                </>
+                    </div>
+                  )}
+                </div>
               )}
             </>
           )}
