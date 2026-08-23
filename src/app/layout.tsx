@@ -41,7 +41,10 @@ export const metadata: Metadata = {
     icon: "/favicon.ico",
     apple: "/icons/apple-icon-180.png",
   },
-  //  appleTouchIcon: "/apple-icon-180.png"
+  // Next.js 15+ emits mobile-web-app-capable only. iOS still needs this tag.
+  other: {
+    "apple-mobile-web-app-capable": "yes",
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
