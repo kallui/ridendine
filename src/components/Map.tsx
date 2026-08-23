@@ -706,6 +706,7 @@ export default function Map({
       defaultZoom={zoomLevel}
       gestureHandling="greedy"
       disableDefaultUI
+      keyboardShortcuts={false}
       clickableIcons={false}
       isFractionalZoomEnabled
       mapId={mapId}
