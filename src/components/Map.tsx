@@ -25,11 +25,13 @@ function RestaurantNameTag({
   extraCount,
   dimmed,
   emphasized,
+  scaled = false,
 }: {
   name: string;
   extraCount: number;
   dimmed: boolean;
   emphasized: boolean;
+  scaled?: boolean;
 }) {
   const title =
     extraCount > 0 ? `${name} · ${extraCount} more — zoom in` : name;
@@ -46,13 +48,18 @@ function RestaurantNameTag({
       : "border-t-restaurant";
 
   return (
-    <div className="flex flex-col items-center drop-shadow-sm" title={title}>
+    <div
+      className={`flex origin-bottom flex-col items-center drop-shadow-sm transition-transform duration-150 ${
+        scaled ? "scale-[1.25]" : "scale-100"
+      }`}
+      title={title}
+    >
       <div
         className={`flex max-w-[11rem] items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium ${fill}`}
       >
         <span className="truncate">{name}</span>
         {extraCount > 0 && (
-          <span className="shrink-0 text-white/80">+{extraCount}</span>
+          <span className="shrink-0 font-bold text-white/80">+{extraCount}</span>
         )}
       </div>
       <div
@@ -639,14 +646,10 @@ export default function Map({
 
   // ── Restaurant tags ───────────────────────────────────────────────────────
   // Cluster overlapping names; the top restaurant keeps its label, others become +N.
-  const popupRestaurant = hoveredRestaurant ?? selectedRestaurant;
-  const isPopupPreview =
-    Boolean(hoveredRestaurant) &&
-    hoveredRestaurant?.placeId !== selectedRestaurant?.placeId;
-  const popupOpen = Boolean(popupRestaurant);
+  const popupOpen = Boolean(selectedRestaurant);
 
-  if (popupRestaurant && popupRestaurant.placeId !== popupRender?.placeId) {
-    setPopupRender(popupRestaurant);
+  if (selectedRestaurant && selectedRestaurant.placeId !== popupRender?.placeId) {
+    setPopupRender(selectedRestaurant);
   }
 
   const restaurantClusters = useMemo(() => {
@@ -685,18 +688,14 @@ export default function Map({
 
   const popupCluster = clusterContaining(
     restaurantClusters,
-    (popupRestaurant ?? popupRender)?.placeId,
+    (selectedRestaurant ?? popupRender)?.placeId,
   );
   const hiddenTagId =
     popupCluster?.restaurant.placeId ?? popupRender?.placeId ?? null;
-  const popupPosition =
-    isPopupPreview && popupCluster
-      ? popupCluster.restaurant.location
-      : popupRender?.location;
-  const popupFromName =
-    isPopupPreview && popupCluster
-      ? popupCluster.restaurant.name
-      : popupRender?.name;
+  const hoveredClusterId = clusterContaining(
+    restaurantClusters,
+    hoveredRestaurant?.placeId,
+  )?.restaurant.placeId;
 
   return (
     <div className="h-full w-full">
@@ -728,7 +727,7 @@ export default function Map({
         const isHighlighted =
           selectedRestaurant?.placeId === restaurant.placeId;
         const isHovered =
-          hoveredRestaurant?.placeId === restaurant.placeId && !isHighlighted;
+          hoveredClusterId === restaurant.placeId && !isHighlighted;
 
         const isDimmed =
           selectedStopIndex !== null &&
@@ -749,29 +748,31 @@ export default function Map({
             }}
           >
             <RestaurantNameTag
-              name={restaurant.name}
+              name={
+                isHovered && hoveredRestaurant
+                  ? hoveredRestaurant.name
+                  : restaurant.name
+              }
               extraCount={cluster.extraCount}
               dimmed={isDimmed}
               emphasized={isHovered || isSelectedStop || isHighlighted}
+              scaled={isHovered}
             />
           </AdvancedMarker>
         );
       })}
 
-      {popupRender && popupPosition && (
+      {popupRender && (
         <RestaurantMarkerPopup
           key={popupRender.placeId}
           restaurant={popupRender}
-          position={popupPosition}
-          fromName={popupFromName ?? popupRender.name}
-          open={popupOpen && popupRestaurant?.placeId === popupRender.placeId}
-          preview={isPopupPreview}
-          onClose={
-            isPopupPreview ? undefined : () => onSelectRestaurant(null)
-          }
-          onOpenPhotos={isPopupPreview ? undefined : onOpenPhotos}
+          position={popupRender.location}
+          fromName={popupRender.name}
+          open={popupOpen && selectedRestaurant?.placeId === popupRender.placeId}
+          onClose={() => onSelectRestaurant(null)}
+          onOpenPhotos={onOpenPhotos}
           onExited={() => {
-            if (!popupRestaurant) setPopupRender(null);
+            if (!selectedRestaurant) setPopupRender(null);
           }}
         />
       )}

@@ -17,12 +17,9 @@ interface RestaurantMarkerPopupProps {
   onClose?: () => void;
   onOpenPhotos?: (restaurant: Restaurant) => void;
   onExited?: () => void;
-  /** Preview from list hover: no close control, ignores pointer events. */
-  preview?: boolean;
 }
 
 const openSpring = { type: "spring" as const, stiffness: 380, damping: 30, mass: 0.75 };
-const previewSpring = { type: "spring" as const, stiffness: 520, damping: 36, mass: 0.55 };
 const closeTween = { duration: 0.2, ease: [0.4, 0, 1, 1] as const };
 
 export default function RestaurantMarkerPopup({
@@ -33,7 +30,6 @@ export default function RestaurantMarkerPopup({
   onClose,
   onOpenPhotos,
   onExited,
-  preview = false,
 }: RestaurantMarkerPopupProps) {
   const photos = usePlacePhotos(
     restaurant.placeId,
@@ -45,12 +41,11 @@ export default function RestaurantMarkerPopup({
 
   useEffect(() => {
     const el = popupRef.current;
-    if (!el || preview) return;
+    if (!el) return;
     google.maps.OverlayView.preventMapHitsAndGesturesFrom(el);
-  }, [preview, restaurant.placeId]);
+  }, [restaurant.placeId]);
 
   const phase = open ? "card" : "tag";
-  const spring = preview ? previewSpring : openSpring;
 
   return (
     <AdvancedMarker
@@ -60,7 +55,7 @@ export default function RestaurantMarkerPopup({
     >
       <div
         ref={popupRef}
-        className={`restaurant-map-popup relative ${preview ? "pointer-events-none" : ""}`}
+        className="restaurant-map-popup relative"
         onClick={(event) => event.stopPropagation()}
         onMouseDown={(event) => event.stopPropagation()}
         onPointerDown={(event) => event.stopPropagation()}
@@ -73,12 +68,12 @@ export default function RestaurantMarkerPopup({
             tag: {
               scale: reduceMotion ? 1 : 0.28,
               opacity: open ? 1 : 0,
-              transition: open ? spring : closeTween,
+              transition: open ? openSpring : closeTween,
             },
             card: {
               scale: 1,
               opacity: 1,
-              transition: spring,
+              transition: openSpring,
             },
           }}
           onAnimationComplete={(definition) => {
@@ -96,12 +91,12 @@ export default function RestaurantMarkerPopup({
               card: {
                 opacity: 1,
                 y: 0,
-                transition: { delay: preview ? 0.02 : 0.06, duration: 0.22 },
+                transition: { delay: 0.06, duration: 0.22 },
               },
             }}
           >
             <span aria-hidden className="absolute inset-x-0 top-0 h-0.5 bg-restaurant" />
-            {!preview && onClose && (
+            {onClose && (
               <div className="absolute right-2 top-2 z-10">
                 <button
                   type="button"
@@ -132,9 +127,7 @@ export default function RestaurantMarkerPopup({
                 event.stopPropagation();
                 onOpenPhotos?.(restaurant);
               }}
-              className={`group relative mb-3 block w-full overflow-hidden rounded-md ${
-                preview ? "pointer-events-none" : ""
-              }`}
+              className="group relative mb-3 block w-full overflow-hidden rounded-md"
               aria-label={`View photos of ${restaurant.name}`}
             >
               <RestaurantPhoto
